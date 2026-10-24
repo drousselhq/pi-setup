@@ -15,3 +15,7 @@ Use focused tests during development and review repairs. Run the project's requi
 Review blockers need a violated requirement or a concrete, credible material consequence, including maintenance consequences. Separate confirmed defects, required test gaps, unverified risks, and optional improvements. Re-review repairs and affected boundaries rather than reopening an unrestricted audit. Do not dismiss genuine in-scope defects to finish early, or silently weaken a mandatory gate. If a gate appears disproportionate, explain the conflict and propose a narrow explicit amendment to its authority.
 
 Before ending, compare the result with the complete authorized request and required evidence. Continue while necessary in-scope work remains; stop when the outcome and checks are satisfied rather than beginning another improvement pass. Stop before completion only for a genuine information, authorization, decision, or external technical blocker that cannot reasonably be worked around, and state it exactly. Report actual verification and remaining limitations honestly; never claim incomplete, unrun, blocked, or failed work as complete.
+
+## GitHub CLI
+
+Use `gh` only for read-only commands (viewing repositories, pull requests, issues, CI runs and logs) unless the user explicitly asks for a specific change. Never create, delete, merge, close, comment, release or change settings on your own initiative, including through `gh api` with a non-GET method.
