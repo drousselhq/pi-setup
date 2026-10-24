@@ -1,0 +1,50 @@
+{
+  "roles": {
+    "planner": {
+      "model": "anthropic/claude-opus-5-5",
+      "thinking": "medium"
+    },
+    "scout": {
+      "model": "anthropic/claude-haiku-5-5",
+      "thinking": "medium"
+    },
+    "architect": {
+      "model": "anthropic/claude-opus-5-5",
+      "thinking": "medium"
+    },
+    "implementer": {
+      "model": "anthropic/claude-sonnet-5-5",
+      "thinking": "high"
+    },
+    "senior": {
+      "model": "anthropic/claude-opus-5-5",
+      "thinking": "high"
+    },
+    "reviewer": {
+      "model": "anthropic/claude-opus-5-5",
+      "thinking": "medium"
+    },
+    "advisor": {
+      "model": "anthropic/claude-opus-5-5",
+      "thinking": "medium"
+    }
+  },
+  "commit": true,
+  "maxRepairCycles": 3,
+  "maxHelpRequests": 2,
+  "quota": {
+    "enabled": true,
+    "fiveHourMaxPercent": 90,
+    "weeklyPaceMarginPercent": 10
+  },
+  "maxCompactionsPerStep": 2,
+  "escalation": {
+    "enabled": true,
+    "afterLoops": 2,
+    "onRecurringFinding": true,
+    "maxLoops": 2
+  },
+  "advisor": {
+    "enabled": true
+  }
+}

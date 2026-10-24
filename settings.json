@@ -1,0 +1,32 @@
+{
+  "packages": [
+    "npm:@aliou/pi-guardrails",
+    "npm:@gotgenes/pi-anthropic-auth",
+    "../../Documents/devel/pi-quotas",
+    "npm:@injaneity/pi-computer-use"
+  ],
+  "lastChangelogVersion": "1.4.0",
+  "theme": "dark",
+  "defaultTools": [
+    "+codemode"
+  ],
+  "defaultProvider": "openai-codex",
+  "defaultModel": "gpt-6.1-sol",
+  "enabledModels": [
+    "deepseek/deepseek-v4-pro",
+    "deepseek/deepseek-flash",
+    "openai-codex/gpt-6-astra",
+    "openai-codex/gpt-6-luna",
+    "openai-codex/gpt-6.1-sol",
+    "anthropic/claude-fable-5-1",
+    "anthropic/claude-opus-5-5",
+    "anthropic/claude-sonnet-5-5",
+    "anthropic/claude-haiku-5-5"
+  ],
+  "retry": {
+    "enabled": true,
+    "maxRetries": 3,
+    "baseDelayMs": 10000
+  },
+  "hideThinkingBlock": false
+}

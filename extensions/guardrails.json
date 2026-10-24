@@ -1,0 +1,30 @@
+{
+  "$schema": "https://unpkg.com/@aliou/pi-guardrails@0.18.0/schema.json",
+  "applyBuiltinDefaults": true,
+  "version": "0.18.0",
+  "onboarding": {
+    "completed": true,
+    "completedAt": "2026-09-23T00:47:43.084Z",
+    "version": "0.18.0"
+  },
+  "features": {
+    "pathAccess": false
+  },
+  "pathAccess": {
+    "mode": "ask",
+    "allowedPaths": [
+      {
+        "kind": "file",
+        "path": "/dev/null"
+      },
+      {
+        "kind": "directory",
+        "path": "/tmp"
+      },
+      {
+        "kind": "directory",
+        "path": "/private/tmp"
+      }
+    ]
+  }
+}
