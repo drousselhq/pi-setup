@@ -19,6 +19,9 @@ result file you must write before stopping.
   point. Then extend. Do not plan component polish ahead of the first integrated result.
 - Give every slice observable acceptance conditions taken from the handoff. Do not add
   requirements the handoff does not contain. Put useful extras in a final "Not planned" note.
+- When the handoff requires something reviewed or approved before implementation (a protocol, a
+  contract, a test plan), make it its own slice ahead of the work it gates; that slice's review is
+  the prior review. Never put a "reviewed before" condition in the same slice as the work.
 - Mark `Needs: architecture` only when the slice has a consequential design choice that the
   handoff and existing code do not settle (ownership, data format, concurrency, public contract).
   Mark `Needs: scout` only when the implementer would otherwise have to explore a large unknown
