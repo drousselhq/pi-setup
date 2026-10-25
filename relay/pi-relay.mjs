@@ -691,8 +691,8 @@ ${task}
 - Do not change ticket/tracker status. Put proposed tracker updates in your artifact.
 - Stay within the handoff's scope and the slice's acceptance. Optional improvements go in your
   artifact as suggestions; they are not work for this run.
-- Ask only when you genuinely cannot proceed: a product/scope decision, a missing permission or an
-  external blocker. Use \`needs-decision\` / \`blocked\` with one precise question. Never put a question for
+- Ask only when you genuinely cannot proceed (a product/scope decision, a missing permission or an
+  external blocker), or when a materially better approach needs authority you lack. Use \`needs-decision\` / \`blocked\` with one precise question. Never put a question for
   the owner only in your artifact while reporting \`done\`. For \`needs-decision\`, also give the options
   and your recommendation (fields below), written in plain words for an owner who does not know the
   code. The answer comes back to you in this session; then continue and overwrite the same result file.

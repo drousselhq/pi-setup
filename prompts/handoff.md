@@ -22,7 +22,7 @@ Capture only what the work needs:
 - **Starting context:** useful paths, existing artifacts, ticket IDs if the project uses a tracker,
   current branch and unfinished edits if known.
 - **Authority:** whether workers may commit locally (default yes, never push), and any limits on
-  models, spending, external systems or data.
+  models, spending, dependencies, external systems or data.
 
 If I gave a slice breakdown, also write `plan.md` in the relay format (see `/plan`); otherwise the
 relay's planner writes it. If I asked for non-default relay settings (no commits, another model,

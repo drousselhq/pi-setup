@@ -17,6 +17,10 @@ stopping. Follow the project's own instructions (AGENTS.md, CONTRIBUTING.md) for
   run it through the real entry point before you expand it. Fix what that check exposes first.
 - Make the smallest coherent change. Extend existing mechanisms. No speculative features,
   unrelated refactors or new test infrastructure without a concrete need.
+- When a materially better approach seems ruled out (a new dependency, network access, a contract
+  change), check what the project rules and handoff actually require. If they allow it under
+  conditions, meet them and record it. If it needs approval you lack, ask (`needs-decision` in
+  relay mode) before building a workaround. Never pick the worse approach silently.
 - Add meaningful behavior and regression tests for the changed risk. Respect the project's coverage
   and file-size rules without padding.
 - Before reporting done, check user-facing behavior through the path the user actually uses (real
