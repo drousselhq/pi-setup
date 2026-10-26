@@ -25,10 +25,9 @@ const STATUSES = {
 
 class RelayStop extends Error {}
 
-// ---------- process helpers ----------
-
-const sleep = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
-const now = () => new Date().toISOString().replace('T', ' ').slice(0, 19);
+// ---------- the outside world ----------
+// Everything the relay does outside its own files goes through `io`: Herdr, Git, notifications, the
+// terminal, waiting, the quota endpoint and process facts. Tests replace it (see test/relay/).
 
 function run(cmd, args, opts = {}) {
   const r = spawnSync(cmd, args, { encoding: 'utf8', maxBuffer: 64 << 20, ...opts });
@@ -36,8 +35,46 @@ function run(cmd, args, opts = {}) {
   return r;
 }
 
+export const realIo = {
+  herdr: (args) => run('herdr', args),
+  git: (args, cwd) => run('git', args, { cwd }),
+  sleep: (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms),
+  notify: (title, body) => run('osascript', ['-e', `display notification ${JSON.stringify(body)} with title ${JSON.stringify(title)}`]),
+  write: (text) => process.stdout.write(text),
+  isTTY: () => Boolean(process.stdout.isTTY),
+  columns: () => {
+    // The relay blocks in synchronous calls, so Node never processes SIGWINCH and process.stdout.columns
+    // goes stale after a resize; process.stdout.getWindowSize() returns the same cached value. Read the
+    // terminal device through the TTY handle instead (a synchronous ioctl, as Node itself does on SIGWINCH).
+    try {
+      const handle = process.stdout.isTTY ? process.stdout._handle : null;
+      if (handle?.getWindowSize) {
+        const size = [0, 0];
+        if (!handle.getWindowSize(size) && size[0] > 0) return size[0];
+      }
+    } catch { /* fall back below */ }
+    return process.stdout.columns || 100;
+  },
+  env: process.env,
+  relayHome: null, // null: the directory of this script (config.json)
+  cwd: () => process.cwd(),
+  pid: process.pid,
+  processAlive: (pid) => { try { process.kill(pid, 0); return true; } catch { return false; } },
+  onExit: (fn) => process.on('exit', fn),
+  fetchUsage: () => {
+    const tok = run('pi', ['auth', 'print-bearer-token', '--provider', 'anthropic']);
+    if (tok.status !== 0) return { status: 0 };
+    const r = run(process.execPath, ['-e', USAGE_SNIPPET], { input: tok.stdout.trim() });
+    try { return JSON.parse(r.stdout); } catch { return { status: 0 }; }
+  },
+};
+let io = realIo;
+
+const sleep = (ms) => io.sleep(ms);
+const now = () => new Date().toISOString().replace('T', ' ').slice(0, 19);
+
 function herdr(args, { allowFail = false } = {}) {
-  const r = run('herdr', args);
+  const r = io.herdr(args);
   let json = null;
   for (const out of [r.stdout, r.stderr]) {
     try { json = JSON.parse(out); break; } catch { /* try the other stream */ }
@@ -49,20 +86,20 @@ function herdr(args, { allowFail = false } = {}) {
 }
 
 function git(args) {
-  const r = run('git', args, { cwd: ctx.project });
+  const r = io.git(args, ctx.project);
   return r.status === 0 ? r.stdout.trim() : null;
 }
 
 function notify(title, body) {
-  process.stdout.write('\x07');
+  io.write('\x07');
   herdr(['notification', 'show', title, '--body', body, '--sound', 'request'], { allowFail: true });
-  run('osascript', ['-e', `display notification ${JSON.stringify(body)} with title ${JSON.stringify(title)}`]);
+  io.notify(title, body);
 }
 
 // ---------- console output ----------
 // The console is for a human watching the run; relay/log.md keeps the same events as plain text.
 
-const TTY = Boolean(process.stdout.isTTY) && !process.env.NO_COLOR;
+let TTY = false; // set at the start of main()
 const sgr = (code) => (s) => (TTY ? `\x1b[${code}m${s}\x1b[0m` : String(s));
 const C = {
   dim: sgr('2'), bold: sgr('1'), red: sgr('31'), green: sgr('32'), yellow: sgr('33'),
@@ -75,20 +112,7 @@ const ROLE_COLOR = {
 const GUTTER = 11; // width of "  HH:MM  ✓ "
 const hhmm = () => new Date().toTimeString().slice(0, 5);
 // Read on every draw: the same run can be viewed on a laptop and on a phone (narrow terminal).
-// The relay blocks in synchronous calls, so Node never processes SIGWINCH and process.stdout.columns
-// goes stale after a resize; ask the terminal directly instead.
-// process.stdout.getWindowSize() returns the same cached value, so read the terminal device through the
-// TTY handle (a synchronous ioctl, as Node itself does on SIGWINCH).
-function termColumns() {
-  try {
-    const handle = process.stdout.isTTY ? process.stdout._handle : null;
-    if (handle?.getWindowSize) {
-      const size = [0, 0];
-      if (!handle.getWindowSize(size) && size[0] > 0) return size[0];
-    }
-  } catch { /* fall back below */ }
-  return process.stdout.columns || 100;
-}
+const termColumns = () => io.columns();
 const width = () => Math.max(20, Math.min(termColumns(), 110));
 const narrow = () => width() < 60;
 const ANSI = /\x1b\[[0-9;]*m/g;
@@ -125,7 +149,7 @@ function fmtDuration(ms) {
 // over several rows; clearing only the last row would leave fragments, so move to a fresh line instead.
 function leaveOrClearLive(cols) {
   if (!liveShown) return;
-  process.stdout.write(liveLength > cols - 1 ? '\n' : '\r\x1b[2K');
+  io.write(liveLength > cols - 1 ? '\n' : '\r\x1b[2K');
   liveShown = false;
 }
 
@@ -141,14 +165,14 @@ function live(text) {
   const cols = termColumns();
   leaveOrClearLive(cols);
   const line = fitLine(text, cols - 2);
-  process.stdout.write(`\r\x1b[2K${line}`);
+  io.write(`\r\x1b[2K${line}`);
   liveShown = true;
   liveLength = visibleLength(line);
 }
 
 function out(text = '') {
   clearLive();
-  console.log(text);
+  io.write(`${text}\n`);
 }
 
 // Word-wrap to the terminal width, measuring visible characters (colour codes excluded).
@@ -356,12 +380,7 @@ function loadSharedUsage() {
   } catch { /* no shared reading yet */ }
 }
 
-function fetchUsageOnce() {
-  const tok = run('pi', ['auth', 'print-bearer-token', '--provider', 'anthropic']);
-  if (tok.status !== 0) return { status: 0 };
-  const r = run(process.execPath, ['-e', USAGE_SNIPPET], { input: tok.stdout.trim() });
-  try { return JSON.parse(r.stdout); } catch { return { status: 0 }; }
-}
+const fetchUsageOnce = () => io.fetchUsage();
 
 function anthropicUsage() {
   loadSharedUsage();
@@ -458,8 +477,8 @@ function setup(topic) {
   if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(topic) || topic === 'archives') {
     throw new RelayStop(`Invalid topic name: ${topic}`);
   }
-  const top = run('git', ['rev-parse', '--show-toplevel']);
-  ctx.project = top.status === 0 ? top.stdout.trim() : process.cwd();
+  const top = io.git(['rev-parse', '--show-toplevel'], io.cwd());
+  ctx.project = top.status === 0 ? top.stdout.trim() : io.cwd();
   ctx.topic = topic;
   ctx.slug = topic.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 24);
   ctx.topicDir = path.join(ctx.project, '.agents_work', topic);
@@ -474,7 +493,7 @@ function setup(topic) {
   }
   fs.mkdirSync(ctx.relayDir, { recursive: true });
 
-  const global = readJson(path.join(RELAY_HOME, 'config.json'), {});
+  const global = readJson(path.join(io.relayHome ?? RELAY_HOME, 'config.json'), {});
   const local = readJson(path.join(ctx.topicDir, 'relay.json'), {});
   cfg = { ...global, ...local, roles: { ...global.roles } };
   for (const [role, v] of Object.entries(local.roles ?? {})) cfg.roles[role] = { ...cfg.roles[role], ...v };
@@ -496,12 +515,11 @@ function acquireLock() {
   const lock = path.join(ctx.relayDir, 'lock');
   if (fs.existsSync(lock)) {
     const pid = Number(fs.readFileSync(lock, 'utf8'));
-    try { process.kill(pid, 0); throw new RelayStop(`Another relay (pid ${pid}) is running this topic.`); }
-    catch (e) { if (e instanceof RelayStop) throw e; }
+    if (io.processAlive(pid)) throw new RelayStop(`Another relay (pid ${pid}) is running this topic.`);
   }
-  fs.writeFileSync(lock, String(process.pid));
-  process.on('exit', () => {
-    try { if (fs.readFileSync(lock, 'utf8') === String(process.pid)) fs.unlinkSync(lock); } catch { /* gone */ }
+  fs.writeFileSync(lock, String(io.pid));
+  io.onExit(() => {
+    try { if (fs.readFileSync(lock, 'utf8') === String(io.pid)) fs.unlinkSync(lock); } catch { /* gone */ }
   });
 }
 
@@ -535,7 +553,7 @@ function parsePlan() {
   return slices.map(({ inAcceptance, ...s }) => ({ ...s, body: s.lines.join('\n').trim() }));
 }
 
-const RUN_ID = `${process.pid}-${Date.now()}`;
+let RUN_ID = null; // set at the start of main()
 const PLAN_SLICE = { id: 'PLAN', title: 'Write the slice plan', body: '', needs: [] };
 const FINAL_SLICE = {
   id: 'FINAL',
@@ -552,16 +570,16 @@ function agentAlive(a) {
   return r.error ? null : r.agent;
 }
 
-// Herdr agent names are limited to 32 characters. Keep the whole topic slug when it fits; otherwise
-// shorten it and add a short hash of the topic, so two long topics with the same start stay distinct.
+// Herdr agent names are unique per Herdr session and limited to 32 characters. Two relays may run the
+// same topic name in different projects, so every name carries a short hash of the project and topic;
+// the topic slug fills the remaining room.
 const AGENT_NAME_MAX = 32;
 function agentName(role, seq) {
   const suffix = `-${role}-${seq}`;
-  const room = AGENT_NAME_MAX - suffix.length;
-  if (ctx.slug.length <= room) return `${ctx.slug}${suffix}`;
-  const hash = createHash('sha1').update(ctx.topic).digest('hex').slice(0, 4);
-  const head = ctx.slug.slice(0, Math.max(1, room - hash.length - 1)).replace(/-+$/, '');
-  return `${head}-${hash}${suffix}`;
+  const hash = createHash('sha1').update(`${ctx.project}\n${ctx.topic}`).digest('hex').slice(0, 4);
+  const room = AGENT_NAME_MAX - suffix.length - hash.length - 1;
+  const head = ctx.slug.slice(0, Math.max(1, room)).replace(/-+$/, '');
+  return `${/^[a-z]/.test(head) ? head : `r${head}`.slice(0, Math.max(1, room))}-${hash}${suffix}`;
 }
 
 function startAgent(role, resumeSession) {
@@ -1589,16 +1607,15 @@ function banner() {
   out(C.gray('\u2570\u2500'));
 }
 
-function main() {
-  const args = process.argv.slice(2);
+function main(args) {
   const topic = args.find((a) => !a.startsWith('-'));
   if (!topic || args.includes('-h') || args.includes('--help')) {
-    console.log('Usage: pi-relay <topic> [--status]\nRun from the project checkout, inside a Herdr pane. See README.md.');
+    io.write('Usage: pi-relay <topic> [--status]\nRun from the project checkout, inside a Herdr pane. See README.md.\n');
     return 0;
   }
   setup(topic);
   if (args.includes('--status')) { printStatus(); return 0; }
-  if (process.env.HERDR_ENV !== '1') throw new RelayStop('Run pi-relay inside a Herdr pane (HERDR_ENV=1).');
+  if (io.env.HERDR_ENV !== '1') throw new RelayStop('Run pi-relay inside a Herdr pane (HERDR_ENV=1).');
   ctx.workspace = herdr(['pane', 'current', '--current']).pane.workspace_id;
   acquireLock();
   save();
@@ -1617,14 +1634,32 @@ function main() {
   return 0;
 }
 
-try {
-  process.exitCode = main();
-} catch (e) {
-  if (state && ctx.stateFile) save();
-  const msg = e instanceof RelayStop ? e.message : `Unexpected error: ${e.stack ?? e}`;
-  emit('run_stop', { reason: msg.slice(0, 2000), kind: e instanceof RelayStop ? 'stop' : 'error' });
-  if (ctx.logFile) log(`STOPPED: ${msg}`, { quiet: true });
-  callout(C.red, 'Relay stopped', [msg, ctx.topic && e instanceof RelayStop ? C.dim(`Resume with: pi-relay ${ctx.topic}`) : null]);
-  if (ctx.topic) notify(`Relay ${ctx.topic} stopped`, msg.slice(0, 200));
-  process.exitCode = e instanceof RelayStop ? 2 : 1;
+// Runs the relay with `args` (as on the command line) against `ioImpl`; returns the exit code:
+// 0 done, 1 unexpected error, 2 stopped for the owner. Every call starts from fresh in-memory state.
+export function runRelay(args, ioImpl = realIo) {
+  io = ioImpl;
+  for (const k of Object.keys(ctx)) delete ctx[k];
+  cfg = undefined;
+  state = undefined;
+  RUN_ID = `${io.pid}-${Date.now()}`;
+  TTY = io.isTTY() && !io.env.NO_COLOR;
+  Object.assign(usageCache, { at: 0, data: null, warnedAt: 0 });
+  sessionCache.clear();
+  liveShown = false;
+  liveLength = 0;
+  try {
+    return main(args);
+  } catch (e) {
+    if (state && ctx.stateFile) save();
+    const msg = e instanceof RelayStop ? e.message : `Unexpected error: ${e.stack ?? e}`;
+    emit('run_stop', { reason: msg.slice(0, 2000), kind: e instanceof RelayStop ? 'stop' : 'error' });
+    if (ctx.logFile) log(`STOPPED: ${msg}`, { quiet: true });
+    callout(C.red, 'Relay stopped', [msg, ctx.topic && e instanceof RelayStop ? C.dim(`Resume with: pi-relay ${ctx.topic}`) : null]);
+    if (ctx.topic) notify(`Relay ${ctx.topic} stopped`, msg.slice(0, 200));
+    return e instanceof RelayStop ? 2 : 1;
+  }
+}
+
+if (process.argv[1] && fs.realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  process.exitCode = runRelay(process.argv.slice(2));
 }

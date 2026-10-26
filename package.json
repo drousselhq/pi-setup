@@ -4,7 +4,7 @@
   "type": "module",
   "description": "Personal Pi agent setup: prompts, skills, extensions and pi-relay, installed into ~/.pi/agent.",
   "scripts": {
-    "test": "node --test",
+    "test": "node --test --test-timeout=60000",
     "check": "node scripts/install.mjs --check",
     "install-agent": "node scripts/install.mjs"
   },
