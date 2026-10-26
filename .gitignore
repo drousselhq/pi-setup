@@ -1,17 +1,2 @@
-# Ignore everything by default; only the shared setup below is tracked.
-# Never tracked: auth.json (login tokens), models-store.json, sessions/, cache/, npm/, bin/,
-# direct-computer-use/, trust.json, relay/usage-cache.json.
-/*
-!/.gitignore
-!/README.md
-!/APPEND_SYSTEM.md
-!/settings.json
-!/models.json
-!/prompts/
-!/skills/
-/skills/*
-!/skills/agent-work/
-!/extensions/
-!/relay/
-/relay/usage-cache.json
 .DS_Store
+node_modules/
