@@ -915,9 +915,9 @@ function recordDecision(slice, final) {
 function consultAdvisor(worker, p, r) {
   const c = state.cur;
   const slice = currentSlice();
-  const fallback = (why) => {
+  const fallback = (why, what = 'could not prepare a brief') => {
     log(`${slice.id} advisor unavailable (${why}); asking the owner directly`, { quiet: true });
-    event(C.yellow('\u26a0'), `${roleTag('advisor')} ${C.yellow('could not prepare a brief')} ${C.dim(`\u00b7 ${why}; asking you directly`)}`);
+    event(C.yellow('\u26a0'), `${roleTag('advisor')} ${C.yellow(what)} ${C.dim(`\u00b7 ${why}; asking you directly`)}`);
     closeAgent('advisor');
     c.advice = null;
     save();
@@ -946,19 +946,33 @@ function consultAdvisor(worker, p, r) {
     askBrief(`/advise Read and execute the relay assignment at ${c.assignments.advisor}\n\nResult file for this step: ${a.briefPath}`);
   } else if (!brief && agentAlive(agent)?.agent_status === 'working') settle(agent, 'working');
   brief = brief ?? readResult(a.briefPath, a.startedAt);
-  if (!brief) {
-    askBrief(`You stopped without writing the brief. Write it to ${a.briefPath} (status "needs-decision") as your assignment describes, then wait for the owner.`);
-    brief = readResult(a.briefPath, a.startedAt);
+  const briefProblem = (b) => (!b ? 'You stopped without writing the brief.'
+    : b.status === 'invalid' ? `Your brief file is invalid (${b.summary}).`
+      : b.status === 'needs-decision' && (!b.brief?.question || !Array.isArray(b.brief.options))
+        ? 'Your brief is incomplete: it needs at least a question and options.' : null);
+  const problem = briefProblem(brief);
+  if (problem) {
+    askBrief(`${problem} Write it to ${a.briefPath} (status "needs-decision") as valid JSON, as your assignment describes, then wait for the owner.`);
+    brief = readResult(a.briefPath, a.sent) ?? brief;
   }
   if (!brief) return fallback('no brief written');
   let final = brief;
   if (brief.status === 'needs-decision') {
-    if (!brief.brief?.question || !Array.isArray(brief.brief.options)) return fallback('incomplete brief');
+    if (briefProblem(brief)) return fallback('incomplete brief');
     emit('advisor_brief', { title: brief.brief.title ?? null, options: brief.brief.options.length, recommended: brief.brief.recommended ?? null });
     final = waitForOperator(agent, brief, { show: showBrief, track: false });
+    if (final.status === 'invalid' || (final.status === 'done' && !valid('advisor', final))) {
+      // A malformed decision file: the owner has answered, so ask once for a corrected file.
+      askBrief(`Your result file ${a.briefPath} is invalid (${final.summary ?? 'no decision'}). Rewrite it as valid JSON `
+        + 'with status "done", the decision, its title and the replies, as your assignment describes. Do not ask the owner again.');
+      final = readResult(a.briefPath, a.sent) ?? final;
+    }
   }
   // Never let the advisor decide without the owner: a decision must follow a brief the owner saw.
-  if (brief.status !== 'needs-decision' || !valid('advisor', final) || final.status !== 'done') return fallback(`unexpected advisor result "${final?.status}"`);
+  if (brief.status !== 'needs-decision' || !valid('advisor', final) || final.status !== 'done') {
+    const what = brief.status === 'needs-decision' ? 'could not record your decision' : 'could not prepare a brief';
+    return fallback(`unexpected advisor result "${final?.status}"`, what);
+  }
   const { id, title } = recordDecision(slice, final);
   emit('owner_decision', { id, title, decision: final.decision, workerRole: worker.role, replies: Object.keys(final.replies ?? {}) });
   log(`${slice.id} owner decision ${id}: ${title}`, { quiet: true });
