@@ -52,6 +52,13 @@ Running workers keep working while the script is stopped.
 - **Stops (exit code 2):** a repair-cycle limit, the scout/architect request limit, or a missing
   plan. Read the message in `relay/log.md`, adjust `plan.md`/`handoff.md` if needed, then run `pi-relay <topic>` again.
   Re-running after a limit stop allows that many more cycles or requests.
+- **A prerequisite slice:** a worker that finds distinct work must come first asks `needs-decision` with an
+  option proposing a slice. If you choose it in the advisor's brief, the relay inserts the slice into `plan.md`
+  before the current one (next free id, e.g. `S2b`), sets the current slice aside, runs the new slice, then
+  resumes the set-aside slice with the same worker sessions, a new base at the current commit and the advisor's
+  reply. You can also do it by hand: stop the relay, add the slice to `plan.md` ahead of the current one and re-run.
+  Either way only a slice with no commits or changes yet is set aside; otherwise the relay stops and says so.
+  Do not edit `relay/state.json`.
 
 ## Files
 

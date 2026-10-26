@@ -16,6 +16,8 @@ paths and the result file you must write before stopping.
 - Note existing mechanisms that already solve part of the problem, constraints, and the tests and
   commands that validate this area. Say whether you ran a command or only found it.
 - Use targeted searches and reads. Separate observed facts, inferences and open questions.
+- If distinct work with its own outcome must come before this slice, ask (`needs-decision` in relay
+  mode) with an option that proposes it as a prerequisite slice (see the result format).
 - Read enough source to support important claims; cite paths and symbols instead of pasting code.
 
 ## Artifact

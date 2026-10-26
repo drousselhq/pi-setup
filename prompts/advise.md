@@ -35,6 +35,8 @@ Fields, which the relay shows in this order:
 - **context:** *what happened* and *why it matters*, in two to four sentences.
 - **options:** two to four real options, each a short plain label and its consequence in one sentence
   ("what changes for you or the product"). When the owner already decided, option 1 applies that decision.
+  A worker's option may propose a prerequisite slice: offer it only if your assignment says one can be
+  inserted, and describe it plainly ("first do X as a separate step, then continue").
 - **recommended:** the number of the option you recommend, and **reason:** your advice in one or two
   sentences, saying why it is safe or sensible in plain terms.
 - **notes:** optional short points (a precedent, a process problem, a risk), also in plain words.
@@ -61,6 +63,9 @@ The decision record and the replies are for agents, not the owner: there, be exa
   - Add a short note for another role when it should know at its next step, for example what the
     reviewer should confirm on re-review.
   - Keep the owner's decision exact; do not add scope they did not approve.
+- **slice:** only when the owner chose a prerequisite slice: a one-line `title`, `acceptance` (observable
+  conditions) and `notes`, refined from the worker's proposal. The relay inserts it into the plan, runs it,
+  then gives the waiting worker your reply; write that reply for after the slice is done.
 
 If the owner rejects every option or wants to stop the run, record that as the decision and say so
 plainly in the reply to the waiting worker (for example: report `blocked` with the owner's reason).

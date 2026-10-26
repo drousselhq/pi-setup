@@ -652,6 +652,7 @@ function writeAssignment(role, purpose, slice, task) {
     ? '\n  "verdict": "accept | changes-required",   // required when status is done\n  "blocking": ["R1"],                       // IDs of findings that must be fixed; empty when accepting'
     : '';
   const questionFields = role === 'advisor' ? '' : '\n  "options": [{ "label": "...", "consequence": "..." }],  // with needs-decision: 2-4 real options'
+    + '\n             // an option may propose a prerequisite slice: add "slice": { "title": "...", "acceptance": ["..."], "notes": "..." }'
     + '\n  "recommended": 1, "reason": "why you recommend it",   // with needs-decision';
   const advisorFields = role !== 'advisor' ? '' : `
   // status needs-decision (the brief for the owner):
@@ -659,7 +660,8 @@ function writeAssignment(role, purpose, slice, task) {
              "options": [{ "label": "...", "consequence": "..." }], "recommended": 1, "reason": "...", "notes": [] },
   // status done (after the owner chose):
   "title": "short decision title", "decision": "the decision as it should be recorded",
-  "replies": { "<role>": "instruction or note for that role" },`;
+  "replies": { "<role>": "instruction or note for that role" },
+  "slice": { "title": "...", "acceptance": ["..."], "notes": "..." },  // only when the owner chose a prerequisite slice`;
   const body = `# Relay assignment ${id}: ${role} for ${slice.id} — ${slice.title}
 
 You are one worker in an automated relay run by a script, not by a person. Nobody reads your
@@ -738,8 +740,17 @@ function readResult(file, since) {
 function valid(role, r) {
   if (!r || !STATUSES[role].includes(r.status)) return false;
   if (role === 'reviewer' && r.status === 'done') return ['accept', 'changes-required'].includes(r.verdict);
-  if (role === 'advisor' && r.status === 'done') return typeof r.decision === 'string' && r.decision.trim() !== '';
+  if (role === 'advisor' && r.status === 'done') {
+    return typeof r.decision === 'string' && r.decision.trim() !== '' && (r.slice === undefined || r.slice === null || validSliceSpec(r.slice));
+  }
   return true;
+}
+
+// A prerequisite slice chosen by the owner: one-line title and at least one acceptance condition.
+function validSliceSpec(s) {
+  const line = (x) => typeof x === 'string' && x.trim() !== '' && !x.includes('\n');
+  return Boolean(s) && line(s.title) && Array.isArray(s.acceptance) && s.acceptance.length > 0 && s.acceptance.every(line)
+    && (s.notes === undefined || typeof s.notes === 'string');
 }
 
 // Wait until the agent settles, handling permission prompts by waiting for the operator.
@@ -932,7 +943,10 @@ function consultAdvisor(worker, p, r) {
       + `${artifactPath(worker.role, slice.id)}${fs.existsSync(artifactPath(worker.role, slice.id)) ? '' : ' (not written yet; that is normal when it asks early)'}. `
       + `Owner decisions so far: ${ctx.decisions}${fs.existsSync(ctx.decisions) ? '' : ' (none yet)'}. Write the brief, wait for the `
       + 'owner to answer in this session, then write the decision and the replies (the waiting worker is the '
-      + `${worker.role}).`);
+      + `${worker.role}). `
+      + (sliceChanged()
+        ? 'This slice already has commits or changes since it started, so a prerequisite slice cannot be inserted before it: do not offer that option.'
+        : 'This slice has no commits or changes yet, so a prerequisite slice can be inserted before it if the owner chooses one.'));
     save();
     emit('advisor_start', { workerRole: worker.role, question: r.question ?? null });
     event(C.magenta('?'), `${roleTag(worker.role)} ${C.magenta('needs a decision')} ${C.dim('\u00b7 asking the advisor for a plain-language brief')}`,
@@ -963,8 +977,9 @@ function consultAdvisor(worker, p, r) {
     final = waitForOperator(agent, brief, { show: showBrief, track: false });
     if (final.status === 'invalid' || (final.status === 'done' && !valid('advisor', final))) {
       // A malformed decision file: the owner has answered, so ask once for a corrected file.
-      askBrief(`Your result file ${a.briefPath} is invalid (${final.summary ?? 'no decision'}). Rewrite it as valid JSON `
-        + 'with status "done", the decision, its title and the replies, as your assignment describes. Do not ask the owner again.');
+      askBrief(`Your result file ${a.briefPath} is invalid (${final.summary ?? 'no decision, or an incomplete slice'}). Rewrite it as valid JSON `
+        + 'with status "done", the decision, its title, the replies and, if the owner chose one, the slice with a one-line title and '
+        + 'at least one acceptance condition, as your assignment describes. Do not ask the owner again.');
       final = readResult(a.briefPath, a.sent) ?? final;
     }
   }
@@ -974,11 +989,22 @@ function consultAdvisor(worker, p, r) {
     return fallback(`unexpected advisor result "${final?.status}"`, what);
   }
   const { id, title } = recordDecision(slice, final);
-  emit('owner_decision', { id, title, decision: final.decision, workerRole: worker.role, replies: Object.keys(final.replies ?? {}) });
+  emit('owner_decision', { id, title, decision: final.decision, workerRole: worker.role, replies: Object.keys(final.replies ?? {}), slice: final.slice?.title ?? null });
   log(`${slice.id} owner decision ${id}: ${title}`, { quiet: true });
   event(C.green('\u2713'), `${C.green(C.bold(`decision ${id}`))} ${title}`, final.decision);
   closeAgent('advisor');
   c.advice = null;
+  if (final.slice) {
+    if (sliceChanged()) {
+      save();
+      throw new RelayStop(`Owner decision ${id} asks for a prerequisite slice ("${final.slice.title}") before ${slice.id}, but ${slice.id} `
+        + `already has commits or changes, so the relay cannot set it aside. Add the slice to plan.md where it fits and deal with `
+        + `${slice.id}'s changes, then re-run pi-relay ${ctx.topic}. The ${worker.role} is still waiting in its tab.`);
+    }
+    const pre = insertPrerequisite(slice, final.slice, id);
+    setAside(pre, { role: worker.role, purpose: p.purpose, text: `Owner decision ${id} (recorded in ${ctx.decisions}): ${final.replies?.[worker.role] ?? final.decision}` });
+    return 'set-aside';
+  }
   for (const [role, text] of Object.entries(final.replies ?? {})) {
     if (role === worker.role || !text) continue;
     c.notes = c.notes ?? {};
@@ -1018,7 +1044,9 @@ function collect() {
       continue;
     }
     if (r && r.status === 'needs-decision' && advisorEnabled() && p.role !== 'advisor') {
-      if (consultAdvisor(agent, p, r)) continue; // the worker has the owner's decision; collect its next result
+      const outcome = consultAdvisor(agent, p, r);
+      if (outcome === 'set-aside') return { status: 'set-aside' }; // a prerequisite slice runs first
+      if (outcome) continue; // the worker has the owner's decision; collect its next result
     }
     if (r && HUMAN_STATUSES.has(r.status)) {
       r = waitForOperator(agent, r);
@@ -1370,7 +1398,112 @@ function sliceProgress(slice) {
   return [pos, pr.criteria ? `acceptance ${pr.criteriaMet}/${pr.criteria}` : null].filter(Boolean).join(' \u00b7 ');
 }
 
+// ---------- prerequisite slices ----------
+// A slice can be set aside while a prerequisite slice runs first: either the owner chose one through the
+// advisor (the relay inserts it into plan.md), or the owner added one to plan.md ahead of the current slice
+// and re-ran the relay. Only an untouched slice (no commits or changes since it started) is set aside. Its
+// state, including its workers' sessions, is kept; afterwards the same workers resume from the new HEAD.
+
+// Writes the owner's prerequisite slice into plan.md just before `current` and returns its id: the
+// previous slice's number with the next free letter (S2 -> S2b, S2c, ...; S0 before S1).
+function insertPrerequisite(current, spec, decisionId) {
+  const plan = parsePlan();
+  const at = plan.findIndex((s) => s.id === current.id);
+  const prev = at > 0 ? plan[at - 1].id.match(/^S(\d+)([A-Z]?)$/) : null;
+  const num = prev ? prev[1] : '0';
+  const taken = new Set([...plan.map((s) => s.id), ...Object.keys(state.slices), ...Object.keys(state.setAsideSlices ?? {})]);
+  const candidates = [...(prev ? [] : ['']), ...'BCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').filter((l) => !prev?.[2] || l > prev[2])];
+  const letter = candidates.find((l) => !taken.has(`S${num}${l}`));
+  if (letter === undefined) {
+    throw new RelayStop(`No free slice id before ${current.id} for the prerequisite slice "${spec.title}" (owner decision ${decisionId}). `
+      + `Add it to plan.md yourself, then re-run pi-relay ${ctx.topic}.`);
+  }
+  const id = `S${num}${letter.toLowerCase()}`;
+  const oneLine = (x) => String(x).replace(/\s+/g, ' ').trim();
+  const block = [
+    `## ${id}: ${oneLine(spec.title)}`,
+    'Needs: none',
+    'Acceptance:',
+    ...spec.acceptance.map((a) => `- ${oneLine(a)}`),
+    `Notes: Prerequisite for ${current.id}, inserted by pi-relay from owner decision ${decisionId}.${spec.notes ? ` ${oneLine(spec.notes)}` : ''}`,
+    '',
+  ];
+  const lines = fs.readFileSync(ctx.plan, 'utf8').split('\n');
+  const heading = new RegExp(`^##\\s+${current.id}\\s*[:\u2014\u2013-]`, 'i');
+  const where = lines.findIndex((l) => heading.test(l));
+  if (where < 0) throw new RelayStop(`Could not find slice ${current.id} in ${ctx.plan} to insert the prerequisite slice before it.`);
+  lines.splice(where, 0, ...block);
+  fs.writeFileSync(ctx.plan, lines.join('\n'));
+  const inserted = parsePlan().find((s) => s.id === id.toUpperCase());
+  if (!inserted) throw new RelayStop(`The prerequisite slice ${id} written to ${ctx.plan} could not be read back.`);
+  log(`${id} inserted into plan.md before ${current.id} (owner decision ${decisionId}): ${oneLine(spec.title)}`, { quiet: true });
+  return inserted.id;
+}
+
+// Keeps the current slice's state (and its workers' sessions) and closes its tabs, so `before` runs first.
+// `resume` is the message for the worker that continues when the slice resumes (null: keep the queued step).
+function setAside(before, resume) {
+  const c = state.cur;
+  closeAgent('advisor');
+  c.advice = null;
+  const agents = { ...c.agents };
+  closeAll();
+  c.agents = agents; // closed tabs; their session files are resumed later
+  state.setAsideSlices = { ...state.setAsideSlices, [c.slice]: { cur: c, before, resume, at: now() } };
+  emit('slice_set_aside', { slice: c.slice, before });
+  log(`${c.slice} set aside: ${before} runs first; then ${c.slice} resumes with the same workers`, { quiet: true });
+  event(C.yellow('\u21b7'), `${C.yellow(`${c.slice} set aside`)} ${C.dim(`\u00b7 ${before} runs first; then ${c.slice} resumes with the same workers`)}`);
+  state.cur = null;
+  save();
+}
+
+// The owner added an unfinished slice to plan.md ahead of the current one and re-ran the relay.
+function setAsideForEarlierSlice() {
+  const c = state.cur;
+  if (!c || c.slice === 'PLAN' || c.slice === 'FINAL') return;
+  const plan = parsePlan();
+  const at = plan.findIndex((s) => s.id === c.slice);
+  const earlier = at > 0 ? plan.slice(0, at).find((s) => state.slices[s.id]?.status !== 'done') : null;
+  if (!earlier) return;
+  if (sliceChanged()) {
+    throw new RelayStop(`plan.md now puts ${earlier.id} before the current slice ${c.slice}, but ${c.slice} already has commits `
+      + 'or uncommitted changes since it started, so it cannot simply be set aside. Move the new slice after it, or deal '
+      + `with ${c.slice}'s changes first, then re-run pi-relay ${ctx.topic}.`);
+  }
+  const p = c.pending;
+  setAside(earlier.id, p ? {
+    role: p.role, purpose: p.purpose,
+    text: `The owner added slice ${earlier.id} to plan.md before this slice, and it has now been done. If your earlier result `
+      + 'asked a question or reported a block, read decisions.md and the plan for the answer.',
+  } : null);
+}
+
+// Restores a set-aside slice: same state and worker sessions, a new base at the current HEAD (the
+// prerequisite's commits are not this slice's work), and the waiting worker told what was done.
+function resumeSetAside(slice) {
+  const entry = state.setAsideSlices[slice.id];
+  delete state.setAsideSlices[slice.id];
+  const c = entry.cur;
+  const done = state.slices[entry.before];
+  const commits = done?.base && done.head && done.head !== done.base ? git(['log', '--format=%h %s', `${done.base}..${done.head}`]) : '';
+  state.cur = { ...c, base: git(['rev-parse', 'HEAD']), baseStatus: git(['status', '--porcelain']) ?? '', pending: null, fresh: false, resumed: RUN_ID };
+  if (entry.resume) {
+    const pre = parsePlan().find((s) => s.id === entry.before);
+    queue({
+      role: entry.resume.role, purpose: entry.resume.purpose, initial: false,
+      text: `${entry.resume.text}\n\nThe prerequisite slice ${entry.before}${pre ? ` ("${pre.title}")` : ''} is done`
+        + `${commits ? `; its commits:\n${commits}` : ' (no commits)'}.\nThis slice's base is now ${state.cur.base}: `
+        + 'review covers only changes made after it. Continue your current step.',
+    });
+  }
+  emit('slice_resumed', { before: entry.before, base: state.cur.base });
+  log(`${slice.id} resumed after ${entry.before}; new base ${state.cur.base}`, { quiet: true });
+  heading(`${slice.id}  ${slice.title}`, `resumed after ${entry.before} \u00b7 ${sliceProgress(slice)}`);
+  save();
+}
+
 function runSlice(slice) {
+  if (!state.cur && state.setAsideSlices?.[slice.id]) resumeSetAside(slice);
   if (!state.cur) {
     state.cur = {
       slice: slice.id, base: git(['rev-parse', 'HEAD']), baseStatus: git(['status', '--porcelain']) ?? '',
@@ -1392,6 +1525,7 @@ function runSlice(slice) {
     if (state.cur.pending) r = collect();
     else if (state.cur.queued) r = send(state.cur.queued);
     else throw new RelayStop(`${state.cur.slice} has no next step recorded; inspect relay/state.json.`);
+    if (r?.status === 'set-aside') break; // the prerequisite slice is next in plan.md
     transition(r);
     save();
   }
@@ -1407,7 +1541,9 @@ function printStatus() {
   for (const s of all) {
     const done = state.slices[s.id]?.status === 'done';
     const current = state.cur?.slice === s.id;
-    const mark = done ? C.green('\u2713 done       ') : current ? C.cyan('\u25b6 in progress') : C.gray('\u00b7 todo       ');
+    const aside = state.setAsideSlices?.[s.id];
+    const mark = done ? C.green('\u2713 done       ') : current ? C.cyan('\u25b6 in progress')
+      : aside ? C.yellow(`\u21b7 after ${aside.before.padEnd(4)}`) : C.gray('\u00b7 todo       ');
     const shown = s.title.length > titleWidth ? `${s.title.slice(0, titleWidth - 1)}\u2026` : s.title.padEnd(titleWidth);
     const title = done ? C.dim(shown) : current ? C.bold(shown) : shown;
     const rec = current ? { cycles: state.cur.cycle, compactions: state.cur.compactions ?? 0 } : state.slices[s.id];
@@ -1472,6 +1608,7 @@ function main() {
   });
   log(`relay started in ${ctx.project} (topic ${topic})`, { quiet: true });
   banner();
+  setAsideForEarlierSlice();
   for (let slice = state.cur ? currentSlice() : nextSlice(); slice; slice = nextSlice()) runSlice(slice);
   emit('run_complete', { head: git(['rev-parse', 'HEAD']) });
   log('relay complete: all slices and final verification done', { quiet: true });

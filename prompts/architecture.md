@@ -15,7 +15,8 @@ file, read it first: it fixes the scope, paths and the result file you must writ
   If no scout report exists, do the focused investigation yourself.
 - Decide; do not leave multiple unchosen options. Resolve reversible technical choices yourself.
   Ask (status `needs-decision` in relay mode) only for choices that change product behavior,
-  scope or a protected contract.
+  scope or a protected contract. When distinct work with its own outcome must come first, ask with an
+  option that proposes it as a prerequisite slice (see the result format).
 - Prefer the smallest design that extends existing mechanisms. Justify every new abstraction by a
   concrete current need. Leave private helpers and naming to the implementer.
 - Cover only what matters for this change, typically:
