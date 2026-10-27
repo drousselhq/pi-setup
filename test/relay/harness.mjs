@@ -94,6 +94,7 @@ export class FakeHerdr {
     this.pidSeq = 1000;
     this.output = '';
     this.idleSleeps = 0;
+    this.ioExtra = {}; // per-test overrides of io fields
   }
 
   io() {
@@ -119,6 +120,7 @@ export class FakeHerdr {
       onExit: () => {},
       fetchUsage: () => ({ status: 0 }),
       relayHome: this.p.relayHome,
+      ...this.ioExtra,
     };
   }
 

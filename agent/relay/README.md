@@ -156,3 +156,13 @@ Your interactive sessions count too, because the relay reads real usage rather t
 A step already running is never interrupted. A worker cut off by a hard limit waits, then is told to continue.
 If usage can't be read, the relay continues without pacing and logs it.
 Set `"enabled": false` to turn pacing off, or lower the margin to spread usage more evenly.
+
+## Code and tests
+
+`pi-relay.mjs` is the command; the code is in `lib/`, one module per concern (the header of
+`pi-relay.mjs` lists them). Everything outside the relay's own files (Herdr, Git, waiting, notifications,
+the terminal, the quota endpoint) goes through one `io` object, so the relay runs in-process in tests.
+The tests live in the pi-setup repository: `test/relay/` (`npm test`), with a fake Herdr whose scripted
+workers play the agents and the owner. Changes are also checked with a real run on a throwaway repository
+(see CONTRIBUTING.md there).
+

@@ -271,3 +271,52 @@ test('two relays with the same topic in different projects get distinct agent na
   assert.ok(names.flat().every((n) => /^[a-z][a-z0-9_-]{0,31}$/.test(n) && n.startsWith(`${TOPIC}-`)), names.flat().join(' '));
   assert.equal(names[0].filter((n) => names[1].includes(n)).length, 0);
 });
+
+// ---------- status, quota, compaction limit ----------
+
+test('--status shows done, current and set-aside slices without starting anything', () => {
+  const p = makeProject();
+  const h = new FakeHerdr(p, standard);
+  assert.equal(h.run(), 0);
+  h.output = '';
+  assert.equal(h.run([TOPIC, '--status']), 0);
+  assert.match(h.output, /S1\s+✓ done\s+First/);
+  assert.match(h.output, /FINAL\s+✓ done/);
+  assert.match(h.output, /slices 2\/2/);
+});
+
+test('a nearly used 5-hour quota window pauses the next step until it resets', () => {
+  const anthropic = Object.fromEntries(['implementer', 'reviewer', 'senior', 'advisor', 'planner', 'scout', 'architect']
+    .map((r) => [r, { model: `anthropic/test-${r}`, thinking: 'low' }]));
+  const p = makeProject({ plan: ONE, config: { roles: anthropic, quota: { enabled: true, fiveHourMaxPercent: 90, weeklyPaceMarginPercent: 10 } } });
+  const h = new FakeHerdr(p, standard);
+  let reads = 0;
+  h.ioExtra.fetchUsage = () => {
+    reads++;
+    const resets = new Date(Date.now() + 60_000).toISOString();
+    return { status: 200, body: { five_hour: { utilization: reads === 1 ? 95 : 5, resets_at: resets } } };
+  };
+  // Waiting takes no time in the harness; in reality the pause outlasts the shared reading's freshness.
+  // Removing the shared cache file during the wait stands in for that.
+  const base = h.io().sleep;
+  h.ioExtra.sleep = (ms) => { fs.rmSync(`${p.relayHome}/usage-cache.json`, { force: true }); base(ms); };
+  assert.equal(h.run(), 0);
+  const types = p.events().map((e) => e.type);
+  assert.ok(types.includes('quota_pause') && types.includes('quota_pause_end'), types.join(' '));
+  assert.ok(fs.existsSync(`${p.relayHome}/usage-cache.json`), 'the shared reading lives in the relay home');
+  assert.equal(reads, 2);
+});
+
+test('a worker that compacts too often without a result is handed to the senior', () => {
+  const p = makeProject({ plan: ONE });
+  const h = new FakeHerdr(p, (c) => {
+    if (c.role === 'implementer' && c.slice === 'S1' && c.n === 1) {
+      fs.appendFileSync(c.session, '{"type":"compaction"}\n{"type":"compaction"}\n');
+      return undefined;
+    }
+    return standard(c);
+  });
+  assert.equal(h.run(), 0);
+  assert.equal(h.prompts[1].role, 'senior');
+  assert.match(h.prompts[1].assignment(), /the implementer was stopped after 2 compactions in one step/);
+});

@@ -24,6 +24,8 @@ import { fileURLToPath } from 'node:url';
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SOURCE = path.join(REPO, 'agent');
 const MANIFEST = '.pi-setup-install.json';
+// Generated at run time beside the relay; never installed from the checkout.
+const EXCLUDE = new Set(['relay/usage-cache.json']);
 
 const sha = (file) => createHash('sha256').update(fs.readFileSync(file)).digest('hex');
 
@@ -33,7 +35,7 @@ function listFiles(dir, base = dir) {
     if (entry.name === '.DS_Store') continue;
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) out.push(...listFiles(full, base));
-    else if (entry.isFile()) out.push(path.relative(base, full));
+    else if (entry.isFile() && !EXCLUDE.has(path.relative(base, full))) out.push(path.relative(base, full));
   }
   return out.sort();
 }
