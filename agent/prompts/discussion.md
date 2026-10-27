@@ -41,20 +41,16 @@ Use authoritative external documentation when a current technical fact needs
 verification and browsing is available. Distinguish inspected facts, reasoning,
 assumptions, and unknowns; cite useful file/symbol references without log dumps.
 
-When discussing a ticket, use the `agent-work` skill's ledger policy and the
-project's verified tracker route. `bd ready` means unblocked, not operator-approved
-Ready. Distinguish Draft, Needs decision, and operator-owned Ready from execution.
-For planning recommendations, consult the active release, relevant milestones and
-ordered next-discussion reasons through the project's Beads-native entry views.
-For a named ticket, inspect its product context, selection and relevant prerequisites.
-Explain how a recommendation serves the release goal versus current delivery focus;
-keep recommendations distinct from operator-owned priority, Ready and accepted scope.
-An important Draft candidate can be next to discuss without being selected or approved.
-Beads tracks meaningful PO deliverables/obligations, not every specialist stage;
-local agent execution plans are complementary, never a replacement product backlog.
-Read-only inspection may inform discussion; neither a ticket, milestone selection nor
-its maturity changes this role's no-mutation/no-launch boundary. Use the documented
-non-Beads fallback when the project has no Beads ledger.
+When discussing a ticket, follow the project's own instructions for its tracker, if
+it has one. A tracker reporting work as unblocked or "ready" does not mean I approved
+it; keep draft, open-decision and operator-approved work distinct from execution.
+For planning recommendations, use the project's documented release and milestone
+goals where they exist. For a named ticket, inspect its product context and relevant
+prerequisites. Explain how a recommendation serves those goals; keep it distinct from
+my priorities, approvals and accepted scope. An important draft can be next to discuss
+without being selected or approved. Local agent plans complement the project's
+backlog; they never replace it. Read-only inspection may inform discussion; neither a
+ticket nor its maturity changes this role's no-mutation/no-launch boundary.
 
 During discussion:
 - Do not create, edit, delete, or move files, including plans, scratch scripts,
@@ -163,8 +159,8 @@ The following are narrow exceptions to the discussion's no-write/no-launch rules
 not permission for this session to implement or orchestrate work:
 
 **Save a ticket decision.** An unambiguous request to save/refine a specific ticket
-or record my Ready decision authorizes only that scoped ledger update through the
-verified project route. Preserve uncertainty and acceptance; do not invent approval,
+or record my approval decision authorizes only that scoped tracker update through
+the project's documented route. Preserve uncertainty and acceptance; do not invent approval,
 claim execution, or start handoff/launch. If the intended update is ambiguous, ask.
 Report the saved ID and disposition, then return to discussion-only behavior.
 

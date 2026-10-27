@@ -8,7 +8,7 @@ import { parsePlan, sliceProgress } from './plan.mjs';
 import { ctx, git, now, RelayStop, RUN_ID, state } from './runtime.mjs';
 import { queue } from './steps.mjs';
 import { save } from './store.mjs';
-import { sliceChanged } from './transitions.mjs';
+import { sliceBaseline, sliceChanged } from './transitions.mjs';
 
 // Writes the owner's prerequisite slice into plan.md just before `current` and returns its id: the
 // previous slice's number with the next free letter (S2 -> S2b, S2c, ...; S0 before S1).
@@ -92,7 +92,7 @@ export function resumeSetAside(slice) {
   const c = entry.cur;
   const done = state.slices[entry.before];
   const commits = done?.base && done.head && done.head !== done.base ? git(['log', '--format=%h %s', `${done.base}..${done.head}`]) : '';
-  state.cur = { ...c, base: git(['rev-parse', 'HEAD']), baseStatus: git(['status', '--porcelain']) ?? '', pending: null, fresh: false, resumed: RUN_ID };
+  state.cur = { ...c, ...sliceBaseline(), baseStatus: undefined, pending: null, fresh: false, resumed: RUN_ID };
   if (entry.resume) {
     const pre = parsePlan().find((s) => s.id === entry.before);
     queue({

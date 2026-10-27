@@ -42,13 +42,36 @@ export function save() {
   fs.renameSync(tmp, ctx.stateFile);
 }
 
+// Only the relay holding the lock writes the topic's state, log and events (see runRelay()). The lock
+// file is created exclusively; a lock left by a relay that is no longer running is replaced once, and
+// so is one that stayed empty or unreadable (a relay killed while writing it) for more than a minute.
+// (Two relays replacing the same stale lock at the same moment can still both start: not guarded.)
+const UNWRITTEN_LOCK_MS = 60_000;
+
 export function acquireLock() {
   const lock = path.join(ctx.relayDir, 'lock');
-  if (fs.existsSync(lock)) {
-    const pid = Number(fs.readFileSync(lock, 'utf8'));
-    if (io.processAlive(pid)) throw new RelayStop(`Another relay (pid ${pid}) is running this topic.`);
+  for (let attempt = 0; ; attempt++) {
+    try {
+      fs.writeFileSync(lock, String(io.pid), { flag: 'wx' });
+      break;
+    } catch (e) {
+      if (e.code !== 'EEXIST') throw e;
+    }
+    let text = null;
+    let age = 0;
+    try {
+      age = Date.now() - fs.statSync(lock).mtimeMs;
+      text = fs.readFileSync(lock, 'utf8').trim();
+    } catch { /* removed meanwhile: try again */ }
+    const pid = /^\d+$/.test(text ?? '') ? Number(text) : null;
+    const live = text !== null && (pid ? io.processAlive(pid) : age < UNWRITTEN_LOCK_MS);
+    if (attempt > 0 || live) {
+      throw new RelayStop(`Another relay${pid ? ` (pid ${pid})` : ''} is running this topic. If none is, `
+        + `delete ${path.relative(ctx.project, lock)} and start pi-relay ${ctx.topic} again.`);
+    }
+    if (text !== null) fs.rmSync(lock, { force: true }); // left by a relay that is no longer running
   }
-  fs.writeFileSync(lock, String(io.pid));
+  ctx.locked = true;
   io.onExit(() => {
     try { if (fs.readFileSync(lock, 'utf8') === String(io.pid)) fs.unlinkSync(lock); } catch { /* gone */ }
   });

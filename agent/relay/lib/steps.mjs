@@ -292,6 +292,12 @@ export function send(msg) {
 // Also used on resume, when the agent may have died or never received the message.
 export function collect() {
   const p = state.cur.pending;
+  // A transition that failed after closing this worker left its finished result pending (see
+  // transition()): replay that result rather than starting a new worker to ask again.
+  if (!state.cur.agents[p.role] && !p.runaway) {
+    const done = readResult(p.resultPath, p.sentAt);
+    if (valid(p.role, done) && !HUMAN_STATUSES.has(done.status)) return done;
+  }
   let nudged = false;
   for (;;) {
     const { agent, fresh } = ensureAgent(p.role);

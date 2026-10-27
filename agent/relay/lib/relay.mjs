@@ -10,14 +10,14 @@ import { usageCache } from './quota.mjs';
 import { cfg, ctx, git, herdr, io, notify, plural, RelayStop, RUN_ID, setCfg, setIo, setRunId, setState, state } from './runtime.mjs';
 import { collect, queue, send } from './steps.mjs';
 import { acquireLock, save, setup } from './store.mjs';
-import { currentSlice, firstMessage, transition } from './transitions.mjs';
+import { currentSlice, firstMessage, sliceBaseline, transition } from './transitions.mjs';
 import { sessionCache } from './usage.mjs';
 
 export function runSlice(slice) {
   if (!state.cur && state.setAsideSlices?.[slice.id]) resumeSetAside(slice);
   if (!state.cur) {
     state.cur = {
-      slice: slice.id, base: git(['rev-parse', 'HEAD']), baseStatus: git(['status', '--porcelain']) ?? '',
+      slice: slice.id, ...sliceBaseline(),
       cycle: 0, help: 0, agents: {}, assignments: {}, pending: null, queued: null, prep: [], findings: [],
       startedAt: Date.now(), fresh: true, resumed: RUN_ID,
     };
@@ -133,10 +133,13 @@ export function runRelay(args, ioImpl = realIo) {
   try {
     return main(args);
   } catch (e) {
-    if (state && ctx.stateFile) save();
     const msg = e instanceof RelayStop ? e.message : `Unexpected error: ${e.stack ?? e}`;
-    emit('run_stop', { reason: msg.slice(0, 2000), kind: e instanceof RelayStop ? 'stop' : 'error' });
-    if (ctx.logFile) log(`STOPPED: ${msg}`, { quiet: true });
+    // A relay that did not get the lock must not touch the topic's records: another relay may own them.
+    if (ctx.locked) {
+      save();
+      emit('run_stop', { reason: msg.slice(0, 2000), kind: e instanceof RelayStop ? 'stop' : 'error' });
+      log(`STOPPED: ${msg}`, { quiet: true });
+    }
     callout(C.red, 'Relay stopped', [msg, ctx.topic && e instanceof RelayStop ? C.dim(`Resume with: pi-relay ${ctx.topic}`) : null]);
     if (ctx.topic) notify(`Relay ${ctx.topic} stopped`, msg.slice(0, 200));
     return e instanceof RelayStop ? 2 : 1;

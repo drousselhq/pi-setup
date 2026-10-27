@@ -9,6 +9,9 @@
 4. Commit. Messages: a short subject, then one `-` bullet per real change.
 5. Install with `node scripts/install.mjs` when the change should take effect. Installing is the release
    step; check first with `--check`. A relay that is already running keeps the code it started with.
+   Each file is replaced atomically, but not the release as a whole: if an install is interrupted, run
+   it again. Files already replaced match the checkout and the rest update normally; a leftover
+   `*.pi-setup-tmp` file in `~/.pi/agent` can be deleted.
 
 If the installer reports a drifted file, decide which version is right: `--pull FILE` copies the
 installed version into the checkout (then commit it); `--force FILE` replaces it with the checkout's.

@@ -247,6 +247,69 @@ test('a slice added by hand ahead of a slice with commits stops the relay', () =
   assert.equal(p.state().cur.slice, 'S2');
 });
 
+// ---------- change detection without commits ----------
+// With commit: false, earlier slices leave files modified. A slice that changes such a file again
+// leaves `git status` as it was; the relay must still see the change.
+
+const UNCOMMITTED = { config: { commit: false } };
+const touch = (p, file, text) => fs.appendFileSync(`${p.project}/${file}`, text);
+
+for (const [kind, file] of [['an already modified', 'README.md'], ['an untracked', 'notes.txt']]) {
+  test(`without commits, a final step that changes ${kind} file again is reviewed`, () => {
+    const p = makeProject(UNCOMMITTED);
+    const h = new FakeHerdr(p, (c) => {
+      if (c.role === 'implementer' && c.slice === 'S1') touch(p, file, 'S1\n');
+      if (c.role === 'implementer' && c.slice === 'FINAL') touch(p, file, 'final fix\n');
+      if (c.role === 'implementer') return c.write(done());
+      return standard(c);
+    });
+    assert.equal(h.run(), 0);
+    assert.deepEqual(roles(h).slice(-2), ['FINAL:implementer', 'FINAL:reviewer']);
+  });
+}
+
+test('without commits, a final step that deletes an already modified file is reviewed', () => {
+  const p = makeProject(UNCOMMITTED);
+  const h = new FakeHerdr(p, (c) => {
+    if (c.role === 'implementer' && c.slice === 'S1') touch(p, 'README.md', 'S1\n');
+    if (c.role === 'implementer' && c.slice === 'FINAL') fs.rmSync(`${p.project}/README.md`);
+    if (c.role === 'implementer') return c.write(done());
+    return standard(c);
+  });
+  assert.equal(h.run(), 0);
+  assert.deepEqual(roles(h).slice(-2), ['FINAL:implementer', 'FINAL:reviewer']);
+});
+
+test('without commits, a final step that changes nothing is not reviewed, even with records outside .gitignore', () => {
+  const p = makeProject(UNCOMMITTED);
+  fs.writeFileSync(`${p.project}/.git/info/exclude`, ''); // .agents_work/ shows up as untracked
+  const h = new FakeHerdr(p, (c) => {
+    if (c.role === 'implementer' && c.slice === 'S1') touch(p, 'README.md', 'S1\n');
+    if (c.role === 'implementer') return c.write(done());
+    return standard(c);
+  });
+  assert.equal(h.run(), 0);
+  assert.equal(roles(h).at(-1), 'FINAL:implementer');
+});
+
+test('without commits, a slice that changed an already modified file is not set aside for one added by hand', () => {
+  const p = makeProject({ ...UNCOMMITTED, plan: null });
+  fs.writeFileSync(p.file('plan.md'), '# Plan\n\n## S1: First\nNeeds: none\nAcceptance:\n- a\n\n## S2: Second\nNeeds: none\nAcceptance:\n- b\n');
+  const h = new FakeHerdr(p, (c) => {
+    if (c.role === 'implementer' && c.slice === 'S1') { touch(p, 'README.md', 'S1\n'); return c.write(done()); }
+    if (c.role === 'implementer' && c.slice === 'S2' && c.n === 1) {
+      touch(p, 'README.md', 'S2 started\n');
+      c.write({ status: 'blocked', summary: 'no fixture', question: 'The fixture is missing' });
+      return c.later(() => { throw new StopRelay('owner pressed Ctrl-C'); });
+    }
+    return standard(c);
+  });
+  assert.equal(h.run(), 1);
+  fs.writeFileSync(p.file('plan.md'), p.read('plan.md').replace('## S2:', '## S1b: Fixture\nNeeds: none\nAcceptance:\n- f\n\n## S2:'));
+  assert.equal(h.run(), 2);
+  assert.match(p.log(), /STOPPED: plan\.md now puts S1B before the current slice S2, but S2 already has commits or uncommitted changes/);
+});
+
 test('a stopped relay resumes the same step on restart', () => {
   const p = makeProject({ plan: ONE });
   const h = new FakeHerdr(p, (c) => {
@@ -260,6 +323,62 @@ test('a stopped relay resumes the same step on restart', () => {
   const before = h.prompts.length;
   assert.equal(h.run(), 0);
   assert.deepEqual(roles(h).slice(before), ['S1:reviewer', 'FINAL:implementer'], 'the restart continues the review, nothing earlier');
+});
+
+test('a planner result without slices stops the relay, and a corrected plan.md resumes it without a new planner', () => {
+  const p = makeProject({ plan: null });
+  const h = new FakeHerdr(p, (c) => (c.role === 'planner' ? c.write(done('planned')) : standard(c)));
+  assert.equal(h.run(), 2);
+  assert.match(p.log(), /STOPPED: The planner finished but .* has no "## S1: \.\.\." slices\. Fix plan\.md/);
+  assert.equal(p.state().cur.pending.role, 'planner', 'the planner result stays pending');
+  fs.writeFileSync(p.file('plan.md'), '# Plan\n\n## S1: Only\nNeeds: none\nAcceptance:\n- x\n');
+  const before = h.prompts.length;
+  const tabs = h.tabs;
+  assert.equal(h.run(), 0);
+  assert.deepEqual(roles(h).slice(before), ['S1:implementer', 'S1:reviewer', 'FINAL:implementer']);
+  assert.equal(h.tabs, tabs + 3, 'no planner tab is started to replay the result');
+  assert.deepEqual(Object.keys(p.state().slices), ['PLAN', 'S1', 'FINAL']);
+});
+
+test('a relay refused by the lock leaves the running relay\'s state, log and events untouched', () => {
+  const p = makeProject();
+  const h = new FakeHerdr(p, standard);
+  fs.mkdirSync(p.relayDir, { recursive: true });
+  const state = JSON.stringify({ seq: 7, slices: { S1: { status: 'done' } }, cur: null, sessions: [], startStatus: '', startHead: null });
+  fs.writeFileSync(`${p.relayDir}/state.json`, state);
+  fs.writeFileSync(`${p.relayDir}/lock`, '4242');
+  fs.writeFileSync(`${p.relayDir}/log.md`, 'running relay\n');
+  h.ioExtra.processAlive = (pid) => pid === 4242;
+  assert.equal(h.run(), 2);
+  assert.match(h.output, /Another relay \(pid 4242\) is running this topic/);
+  assert.equal(fs.readFileSync(`${p.relayDir}/state.json`, 'utf8'), state);
+  assert.equal(p.log(), 'running relay\n');
+  assert.equal(fs.existsSync(`${p.relayDir}/events.jsonl`), false);
+  assert.equal(fs.readFileSync(`${p.relayDir}/lock`, 'utf8'), '4242');
+  assert.equal(h.prompts.length, 0);
+});
+
+test('a lock left by a relay that is no longer running is taken over', () => {
+  const p = makeProject();
+  const h = new FakeHerdr(p, standard);
+  fs.mkdirSync(p.relayDir, { recursive: true });
+  fs.writeFileSync(`${p.relayDir}/lock`, '4242');
+  assert.equal(h.run(), 0);
+  assert.notEqual(fs.readFileSync(`${p.relayDir}/lock`, 'utf8'), '4242');
+});
+
+test('an empty lock is respected while it is fresh and taken over once it is old', () => {
+  const p = makeProject();
+  const h = new FakeHerdr(p, standard);
+  const lock = `${p.relayDir}/lock`;
+  fs.mkdirSync(p.relayDir, { recursive: true });
+  fs.writeFileSync(lock, ''); // a relay killed between creating the lock and writing its pid
+  assert.equal(h.run(), 2);
+  assert.match(h.output, /Another relay is running this topic\. If none is, delete \.agents_work\/tt\/relay\/lock and start\s+(┃ )?pi-relay tt again\./);
+  const old = new Date(Date.now() - 120_000);
+  fs.utimesSync(lock, old, old);
+  assert.equal(h.run(), 0);
+  assert.notEqual(fs.readFileSync(lock, 'utf8'), '');
 });
 
 test('two relays with the same topic in different projects get distinct agent names', () => {
