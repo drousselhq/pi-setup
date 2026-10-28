@@ -52,9 +52,13 @@ export function writeAssignment(role, purpose, slice, task) {
   const advisorFields = role !== 'advisor' ? '' : `
   // status needs-decision (the brief for the owner):
   "brief": { "title": "...", "question": "...", "context": "...",
-             "options": [{ "label": "...", "consequence": "..." }], "recommended": 1, "reason": "...", "notes": [] },
+             "options": [{ "label": "...", "consequence": "..." }],  // the recommended option first
+             // an option that postpones the decision also carries
+             // "deferral": { "missing": "...", "source": "...", "decisionPoint": "...", "interim": "..." }
+             "recommended": 1, "reason": "...", "notes": [] },
   // status done (after the owner chose):
   "title": "short decision title", "decision": "the decision as it should be recorded",
+  "deferral": { "missing": "...", "source": "...", "decisionPoint": "...", "interim": "..." },  // only when the owner chose to postpone
   "replies": { "<role>": "instruction or note for that role" },
   "slice": { "title": "...", "acceptance": ["..."], "notes": "..." },  // only when the owner chose a prerequisite slice`;
   const body = `# Relay assignment ${id}: ${role} for ${slice.id} — ${slice.title}
@@ -136,10 +140,17 @@ export function valid(role, r) {
   if (!r || !STATUSES[role].includes(r.status)) return false;
   if (role === 'reviewer' && r.status === 'done') return ['accept', 'changes-required'].includes(r.verdict);
   if (role === 'advisor' && r.status === 'done') {
-    return typeof r.decision === 'string' && r.decision.trim() !== '' && (r.slice === undefined || r.slice === null || validSliceSpec(r.slice));
+    return typeof r.decision === 'string' && r.decision.trim() !== '' && (r.slice === undefined || r.slice === null || validSliceSpec(r.slice))
+      && (r.deferral === undefined || r.deferral === null || validDeferral(r.deferral));
   }
   return true;
 }
+
+// A postponed decision must say what is missing, where it comes from, when it is decided anyway and
+// what happens until then.
+export const DEFERRAL_FIELDS = { missing: 'Missing information', source: 'Expected from', decisionPoint: 'Decided at', interim: 'Until then' };
+export const validDeferral = (d) => Boolean(d) && typeof d === 'object'
+  && Object.keys(DEFERRAL_FIELDS).every((k) => typeof d[k] === 'string' && d[k].trim() !== '');
 
 // A prerequisite slice chosen by the owner: one-line title and at least one acceptance condition.
 export function validSliceSpec(s) {

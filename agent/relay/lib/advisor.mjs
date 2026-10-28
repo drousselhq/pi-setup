@@ -7,11 +7,32 @@ import { run } from './io.mjs';
 import { insertPrerequisite, setAside } from './prerequisites.mjs';
 import { quotaGate } from './quota.mjs';
 import { cfg, ctx, notify, RelayStop, state } from './runtime.mjs';
-import { artifactPath, prompt, readResult, resultPathFor, settle, showQuestion, valid, waitForOperator, writeAssignment } from './steps.mjs';
+import {
+  artifactPath, DEFERRAL_FIELDS, prompt, readResult, resultPathFor, settle, showQuestion, valid, validDeferral, waitForOperator, writeAssignment,
+} from './steps.mjs';
 import { save } from './store.mjs';
 import { currentSlice, sliceChanged } from './transitions.mjs';
 
 export const advisorEnabled = () => cfg.advisor?.enabled !== false && Boolean(cfg.roles?.advisor?.model);
+
+// Labels that postpone the decision; such an option must carry a complete deferral.
+const POSTPONES = new RegExp('\\b(defer\\w*|postpon\\w*|later|revisit\\w*|investigat\\w*|for now)\\b', 'i');
+
+// What is wrong with a brief, as an instruction to the advisor; null when it can be shown.
+function briefProblem(b) {
+  if (!b) return 'You stopped without writing the brief.';
+  if (b.status === 'invalid') return `Your brief file is invalid (${b.summary}).`;
+  if (b.status !== 'needs-decision') return null;
+  const options = b.brief?.options;
+  if (!b.brief?.question || !Array.isArray(options)) return 'Your brief is incomplete: it needs at least a question and options.';
+  if (Number(b.brief.recommended) !== 1) return 'Your brief must list the recommended option first and set "recommended" to 1.';
+  const bad = options.findIndex((o) => (o?.deferral || POSTPONES.test(o?.label ?? '')) && !validDeferral(o?.deferral));
+  if (bad >= 0) {
+    return `Option ${bad + 1} postpones the decision but does not state its "deferral" (missing, source, decisionPoint, interim). `
+      + 'Give all four, or, if you cannot, replace it with a concrete answer: do not offer it as a postponement.';
+  }
+  return null;
+}
 
 export function showBrief(agent, r) {
   if (!r.brief) return showQuestion(agent, r); // e.g. the advisor itself reports blocked
@@ -23,7 +44,10 @@ export function showBrief(agent, r) {
   callout(C.magenta, `Decision needed: ${b.title}`, [
     b.question,
     b.context && C.dim(b.context),
-    ...options.map((o, i) => `${i + 1 === rec ? C.yellow('\u2605') : ' '} ${i + 1}. ${o.label}${o.consequence ? C.dim(` \u2014 ${o.consequence}`) : ''}`),
+    ...options.flatMap((o, i) => [
+      `${i + 1 === rec ? C.yellow('\u2605') : ' '} ${i + 1}. ${o.label}${o.consequence ? C.dim(` \u2014 ${o.consequence}`) : ''}`,
+      ...(o.deferral ? Object.entries(DEFERRAL_FIELDS).map(([k, name]) => C.dim(`      ${name}: ${o.deferral[k]}`)) : []),
+    ]),
     rec && b.reason ? `${C.yellow('\u2605')} ${C.dim(`Recommended: ${b.reason}`)}` : null,
     ...(Array.isArray(b.notes) ? b.notes : []).filter(Boolean).map((n) => C.dim(`Note: ${n}`)),
     C.dim(`Answer in tab "${agent.label}". A number is enough; you can also ask it questions.`),
@@ -35,7 +59,9 @@ export function recordDecision(slice, final) {
   const text = fs.existsSync(ctx.decisions) ? fs.readFileSync(ctx.decisions, 'utf8') : header;
   const id = `D${(text.match(/^## D\d+/gm) ?? []).length + 1}`;
   const title = String(final.title ?? 'Decision').replace(/\s+/g, ' ').trim();
-  fs.writeFileSync(ctx.decisions, `${text.trimEnd()}\n\n## ${id} \u00b7 ${new Date().toISOString().slice(0, 10)} \u00b7 ${slice.id} \u00b7 ${title}\n\n${final.decision.trim()}\n`);
+  const deferral = final.deferral
+    ? `\n**Deferred.**\n${Object.entries(DEFERRAL_FIELDS).map(([k, name]) => `- ${name}: ${String(final.deferral[k]).trim()}`).join('\n')}\n` : '';
+  fs.writeFileSync(ctx.decisions, `${text.trimEnd()}\n\n## ${id} \u00b7 ${new Date().toISOString().slice(0, 10)} \u00b7 ${slice.id} \u00b7 ${title}\n\n${final.decision.trim()}\n${deferral}`);
   return { id, title };
 }
 
@@ -59,7 +85,9 @@ export function consultAdvisor(worker, p, r) {
     c.assignments.advisor = writeAssignment('advisor', 'advise', slice,
       `The ${worker.role} is waiting for the owner. Its result, with its question, is ${r._path}; its record is `
       + `${artifactPath(worker.role, slice.id)}${fs.existsSync(artifactPath(worker.role, slice.id)) ? '' : ' (not written yet; that is normal when it asks early)'}. `
-      + `Owner decisions so far: ${ctx.decisions}${fs.existsSync(ctx.decisions) ? '' : ' (none yet)'}. Write the brief, wait for the `
+      + `Owner decisions so far: ${ctx.decisions}${fs.existsSync(ctx.decisions) ? '' : ' (none yet)'}; check it for earlier deferrals of the same question. `
+      + 'Where the project\'s own instructions (its AGENTS.md or equivalent, and the decision records they point to) define rules for '
+      + 'decisions and deferrals, follow them: they take precedence over the defaults of your prompt. Write the brief, wait for the '
       + 'owner to answer in this session, then write the decision and the replies (the waiting worker is the '
       + `${worker.role}). `
       + (sliceChanged()
@@ -78,10 +106,6 @@ export function consultAdvisor(worker, p, r) {
     askBrief(`/advise Read and execute the relay assignment at ${c.assignments.advisor}\n\nResult file for this step: ${a.briefPath}`);
   } else if (!brief && agentAlive(agent)?.agent_status === 'working') settle(agent, 'working');
   brief = brief ?? readResult(a.briefPath, a.startedAt);
-  const briefProblem = (b) => (!b ? 'You stopped without writing the brief.'
-    : b.status === 'invalid' ? `Your brief file is invalid (${b.summary}).`
-      : b.status === 'needs-decision' && (!b.brief?.question || !Array.isArray(b.brief.options))
-        ? 'Your brief is incomplete: it needs at least a question and options.' : null);
   const problem = briefProblem(brief);
   if (problem) {
     askBrief(`${problem} Write it to ${a.briefPath} (status "needs-decision") as valid JSON, as your assignment describes, then wait for the owner.`);
@@ -96,8 +120,9 @@ export function consultAdvisor(worker, p, r) {
     if (final.status === 'invalid' || (final.status === 'done' && !valid('advisor', final))) {
       // A malformed decision file: the owner has answered, so ask once for a corrected file.
       askBrief(`Your result file ${a.briefPath} is invalid (${final.summary ?? 'no decision, or an incomplete slice'}). Rewrite it as valid JSON `
-        + 'with status "done", the decision, its title, the replies and, if the owner chose one, the slice with a one-line title and '
-        + 'at least one acceptance condition, as your assignment describes. Do not ask the owner again.');
+        + 'with status "done", the decision, its title, the replies, if the owner chose one, the slice with a one-line title and '
+        + 'at least one acceptance condition, and, if the owner chose to postpone, the deferral with all four fields, as your assignment '
+        + 'describes. Do not ask the owner again.');
       final = readResult(a.briefPath, a.sent) ?? final;
     }
   }

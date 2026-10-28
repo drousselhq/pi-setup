@@ -47,6 +47,14 @@ Running workers keep working while the script is stopped.
   the advisor's tab; a number is enough, and you can also ask it questions. The relay records the decision
   in `decisions.md`, delivers the advisor's reply to the waiting worker (and notes for other roles at their
   next step), and continues. If the advisor cannot produce a brief, the worker's question is shown directly.
+
+  **Decide rather than defer.** The recommended option comes first. An option that postpones the decision
+  must state what information is missing, what is expected to supply it, the decision point (the step or event
+  at which it is decided whatever happens) and the behaviour until then; the relay sends a brief back to the
+  advisor when such an option lacks them. The advisor does not recommend postponing just because evidence is
+  incomplete, and points out an earlier deferral of the same question in `decisions.md`. A chosen deferral is
+  recorded there with those four items. The project's own rules for decisions, where its instructions define
+  them, take precedence.
 - **`blocked`:** you get a notification with the problem. Answer or fix it, then reply to the worker in its
   tab. It continues and rewrites its result file, and the relay picks that up.
 - **Stops (exit code 2):** a repair-cycle limit, the scout/architect request limit, or a missing
