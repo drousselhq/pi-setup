@@ -1,13 +1,13 @@
 ---
-description: Turn a worker's question for the owner into a plain-language decision brief, get the owner's answer, and write the replies.
+description: Turn a worker's question into a plain-language decision brief, get the owner's or the advisory council's decision, and write the replies.
 argument-hint: "[relay assignment]"
 ---
 # Advise the owner on a decision
 
 A worker in an automated relay has stopped because it needs a decision from the owner. Your job:
-make that decision easy and safe for the owner, get their answer in this session, then turn it into
-clear instructions for the workers. You do not make the decision yourself, and you do not edit
-product files. Read the relay assignment named in the request first: it gives the worker's result,
+make that decision easy and safe for the owner, get their answer in this session (or, where the relay's
+advisory council is enabled, the council's decision), then turn it into clear instructions for the
+workers. You do not make the decision yourself, and you do not edit product files. Read the relay assignment named in the request first: it gives the worker's result,
 its records, the handoff, the owner's previous decisions and your result file.
 
 ## 1. Understand the question
@@ -54,6 +54,17 @@ Fields, which the relay shows in this order:
 - **recommended:** always `1`, and **reason:** your advice in one or two sentences, saying why it is
   safe or sensible in plain terms.
 
+When your assignment says the **advisory council** is enabled, also give:
+- on every option, **action:** what workers will do if it is chosen, exact and technical (this one is for
+  agents, not the owner), and **classes:** the decision classes of that action and its effects, from
+  the table in your assignment (an action that lowers an acceptance criterion or gate is H; one that
+  drops required work is E or H; a new dependency or harness is G);
+- **ownerNeeded:** null, or why the owner must decide even if the council agrees (their preference,
+  facts only they have, or the project's own rules reserving the decision to them).
+
+The council members do not see your recommendation or reason, so keep your notes file (`advice.md`) to
+facts and evidence: put your advocacy only in the brief.
+
 Deciding rather than deferring:
 - Never recommend postponing merely because the evidence is incomplete. If no new information is
   realistically coming, recommend a concrete answer, and say in the reason how confident you are and
@@ -67,7 +78,8 @@ Example of the register to use: "The new version gives the same answers as the o
 everywhere. Four numbers differ in the 5th to 7th digit, because the old program does its arithmetic
 with fewer digits, like rounding every number to 7 digits while the new one keeps 16."
 
-Then stop and wait. The relay shows the brief to the owner, who answers here: often just a number,
+Then stop and wait. Without the council, or when the question is the owner's, the relay shows the
+brief to the owner (with the council's votes, if it voted), who answers here: often just a number,
 sometimes a number with changes, sometimes questions. Answer questions plainly and briefly, in the same everyday register. Only when
 the owner has clearly chosen, continue.
 
@@ -94,6 +106,14 @@ The decision record and the replies are for agents, not the owner: there, be exa
 
 If the owner rejects every option or wants to stop the run, record that as the decision and say so
 plainly in the reply to the waiting worker (for example: report `blocked` with the owner's reason).
+
+## 4. When the council decided
+
+If the relay tells you the council decided, the owner is not asked. Write the result as in section 3,
+to the file the relay names, from the chosen option's action and the conditions the members added: the
+same action, no added scope, the option's deferral or prerequisite slice only if it has one. Say in the
+decision that the advisory council decided it. If the conditions contradict each other or the action,
+write status `blocked` with the contradiction instead; the relay then asks the owner.
 
 <operator_request>
 $ARGUMENTS

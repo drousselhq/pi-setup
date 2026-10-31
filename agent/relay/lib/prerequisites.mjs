@@ -10,9 +10,9 @@ import { queue } from './steps.mjs';
 import { save } from './store.mjs';
 import { sliceBaseline, sliceChanged } from './transitions.mjs';
 
-// Writes the owner's prerequisite slice into plan.md just before `current` and returns its id: the
+// Writes a decided prerequisite slice into plan.md just before `current` and returns its id: the
 // previous slice's number with the next free letter (S2 -> S2b, S2c, ...; S0 before S1).
-export function insertPrerequisite(current, spec, decisionId) {
+export function insertPrerequisite(current, spec, decision) { // decision: e.g. "owner decision D2"
   const plan = parsePlan();
   const at = plan.findIndex((s) => s.id === current.id);
   const prev = at > 0 ? plan[at - 1].id.match(/^S(\d+)([A-Z]?)$/) : null;
@@ -21,7 +21,7 @@ export function insertPrerequisite(current, spec, decisionId) {
   const candidates = [...(prev ? [] : ['']), ...'BCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').filter((l) => !prev?.[2] || l > prev[2])];
   const letter = candidates.find((l) => !taken.has(`S${num}${l}`));
   if (letter === undefined) {
-    throw new RelayStop(`No free slice id before ${current.id} for the prerequisite slice "${spec.title}" (owner decision ${decisionId}). `
+    throw new RelayStop(`No free slice id before ${current.id} for the prerequisite slice "${spec.title}" (${decision}). `
       + `Add it to plan.md yourself, then re-run pi-relay ${ctx.topic}.`);
   }
   const id = `S${num}${letter.toLowerCase()}`;
@@ -31,7 +31,7 @@ export function insertPrerequisite(current, spec, decisionId) {
     'Needs: none',
     'Acceptance:',
     ...spec.acceptance.map((a) => `- ${oneLine(a)}`),
-    `Notes: Prerequisite for ${current.id}, inserted by pi-relay from owner decision ${decisionId}.${spec.notes ? ` ${oneLine(spec.notes)}` : ''}`,
+    `Notes: Prerequisite for ${current.id}, inserted by pi-relay from ${decision}.${spec.notes ? ` ${oneLine(spec.notes)}` : ''}`,
     '',
   ];
   const lines = fs.readFileSync(ctx.plan, 'utf8').split('\n');
@@ -42,7 +42,7 @@ export function insertPrerequisite(current, spec, decisionId) {
   fs.writeFileSync(ctx.plan, lines.join('\n'));
   const inserted = parsePlan().find((s) => s.id === id.toUpperCase());
   if (!inserted) throw new RelayStop(`The prerequisite slice ${id} written to ${ctx.plan} could not be read back.`);
-  log(`${id} inserted into plan.md before ${current.id} (owner decision ${decisionId}): ${oneLine(spec.title)}`, { quiet: true });
+  log(`${id} inserted into plan.md before ${current.id} (${decision}): ${oneLine(spec.title)}`, { quiet: true });
   return inserted.id;
 }
 

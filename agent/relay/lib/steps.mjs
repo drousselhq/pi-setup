@@ -55,7 +55,8 @@ export function writeAssignment(role, purpose, slice, task) {
              "options": [{ "label": "...", "consequence": "..." }],  // the recommended option first
              // an option that postpones the decision also carries
              // "deferral": { "missing": "...", "source": "...", "decisionPoint": "...", "interim": "..." }
-             "recommended": 1, "reason": "...", "notes": [] },
+             // with the advisory council enabled, each option also has "action": "exact technical action", "classes": ["A"]
+             "recommended": 1, "reason": "...", "notes": [], "ownerNeeded": null },
   // status done (after the owner chose):
   "title": "short decision title", "decision": "the decision as it should be recorded",
   "deferral": { "missing": "...", "source": "...", "decisionPoint": "...", "interim": "..." },  // only when the owner chose to postpone
@@ -72,8 +73,8 @@ the result file, then stop. Do not launch other agents and do not start another 
 - Handoff (agreed intent, scope, acceptance, authority): ${fs.existsSync(ctx.handoff) ? ctx.handoff : '(none)'}
 - Plan: ${fs.existsSync(ctx.plan) ? ctx.plan : '(not written yet)'}
 - Slice base commit: ${state.cur.base ?? '(none)'}
-- Owner decisions so far: ${ctx.decisions}${fs.existsSync(ctx.decisions) ? '' : ' (none yet)'}. Read it before you start;
-  never ask the owner again about something it already settles.
+- Decisions so far (the owner's, and the advisory council's where enabled): ${ctx.decisions}${fs.existsSync(ctx.decisions) ? '' : ' (none yet)'}.
+  Read it before you start; never ask again about something it already settles.
 - Your artifact: ${artifactPath(role, slice.id)}
 ${others.length ? `- Other artifacts for this slice: ${others.join(', ')}\n` : ''}
 Pre-existing uncommitted changes when the relay started (not this work; never stage, revert or edit them):

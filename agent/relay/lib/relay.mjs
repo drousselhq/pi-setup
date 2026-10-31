@@ -3,6 +3,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { C, callout, compactionText, emit, heading, log, out, purposeLabel, resetConsole, ROLE_COLOR, roleTag, setTTY, shortModel } from './console.mjs';
+import { checkCouncilConfig } from './council.mjs';
 import { realIo } from './io.mjs';
 import { FINAL_SLICE, nextSlice, parsePlan, PLAN_SLICE, planSummary, progress, progressText, sliceProgress } from './plan.mjs';
 import { resumeSetAside, setAsideForEarlierSlice } from './prerequisites.mjs';
@@ -77,7 +78,7 @@ export function printStatus() {
 
 export function banner() {
   const slices = parsePlan();
-  const models = ['planner', 'scout', 'architect', 'implementer', 'senior', 'reviewer', 'advisor']
+  const models = ['planner', 'scout', 'architect', 'implementer', 'senior', 'reviewer', 'advisor', ...(cfg.council?.enabled ? cfg.council.members ?? [] : [])]
     .filter((r) => cfg.roles?.[r])
     .map((r) => `${(ROLE_COLOR[r] ?? C.bold)(r)} ${C.dim(`${shortModel(cfg.roles[r].model)}/${cfg.roles[r].thinking ?? 'medium'}`)}`);
   const row = (k, v) => out(`${C.gray('\u2502')}  ${C.gray(k.padEnd(8))} ${v}`);
@@ -100,12 +101,14 @@ export function main(args) {
   setup(topic);
   if (args.includes('--status')) { printStatus(); return 0; }
   if (io.env.HERDR_ENV !== '1') throw new RelayStop('Run pi-relay inside a Herdr pane (HERDR_ENV=1).');
+  checkCouncilConfig();
   ctx.workspace = herdr(['pane', 'current', '--current']).pane.workspace_id;
   acquireLock();
   save();
   emit('run_start', {
     project: ctx.project, resumed: Boolean(state.cur), head: git(['rev-parse', 'HEAD']),
     roles: cfg.roles, commit: Boolean(cfg.commit), maxRepairCycles: cfg.maxRepairCycles ?? 3, quota: cfg.quota ?? null,
+    council: cfg.council?.enabled ? cfg.council : null,
   });
   log(`relay started in ${ctx.project} (topic ${topic})`, { quiet: true });
   banner();
@@ -113,7 +116,10 @@ export function main(args) {
   for (let slice = state.cur ? currentSlice() : nextSlice(); slice; slice = nextSlice()) runSlice(slice);
   emit('run_complete', { head: git(['rev-parse', 'HEAD']) });
   log('relay complete: all slices and final verification done', { quiet: true });
-  callout(C.green, `Relay ${ctx.topic} complete`, ['All slices and the final verification are done.', C.dim(`History: ${path.relative(ctx.project, ctx.logFile)}`)]);
+  const council = (state.councilDecisions ?? []).map((d) => `  ${d.id} (${d.slice}): ${d.title}`);
+  callout(C.green, `Relay ${ctx.topic} complete`, ['All slices and the final verification are done.',
+    ...(council.length ? [`Decided by the advisory council (in ${path.relative(ctx.project, ctx.decisions)}; yours to overrule):`, ...council] : []),
+    C.dim(`History: ${path.relative(ctx.project, ctx.logFile)}`)]);
   notify(`Relay ${ctx.topic} complete`, 'All slices and final verification are done.');
   return 0;
 }

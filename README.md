@@ -13,7 +13,7 @@ This checkout is where the setup is changed and committed. `scripts/install.mjs`
 |---|---|
 | `agent/APPEND_SYSTEM.md` | Instructions appended to every session's system prompt |
 | `agent/settings.json`, `agent/models.json` | Pi settings: packages, enabled models, defaults, model overrides |
-| `agent/prompts/` | Prompt templates (`/plan`, `/implement`, `/review`, `/handoff`, `/advise`, …) |
+| `agent/prompts/` | Prompt templates (`/plan`, `/implement`, `/review`, `/handoff`, `/advise`, `/council`, …) |
 | `agent/skills/agent-work/` | Conventions for `.agents_work/<topic>/` folders and role records |
 | `agent/extensions/` | Herdr agent-state and Moshi notification extensions, plus package settings |
 | `agent/relay/` | `pi-relay`: script, role and model configuration, and its [README](agent/relay/README.md) |

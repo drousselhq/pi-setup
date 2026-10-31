@@ -26,7 +26,8 @@ export function setup(topic) {
 
   const global = readJson(path.join(io.relayHome ?? RELAY_HOME, 'config.json'), {});
   const local = readJson(path.join(ctx.topicDir, 'relay.json'), {});
-  setCfg({ ...global, ...local, roles: { ...global.roles } });
+  // Roles and the council block merge field by field; other settings are replaced whole.
+  setCfg({ ...global, ...local, roles: { ...global.roles }, council: { ...global.council, ...local.council } });
   for (const [role, v] of Object.entries(local.roles ?? {})) cfg.roles[role] = { ...cfg.roles[role], ...v };
 
   setState(readJson(ctx.stateFile, { seq: 0, slices: {}, cur: null, sessions: [] }));

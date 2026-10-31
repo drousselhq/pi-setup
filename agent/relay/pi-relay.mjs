@@ -3,8 +3,9 @@
 // The script owns sequencing and state; Pi workers in Herdr tabs own all judgment.
 // See README.md beside this file for file formats and usage. The code is in lib/:
 //   relay.mjs          main loop and runRelay()           transitions.mjs    what follows each result
-//   steps.mjs          one worker step: assignment,       advisor.mjs        owner decisions via the advisor
-//                      prompt, result file, waiting       prerequisites.mjs  inserted slices, set aside, resume
+//   steps.mjs          one worker step: assignment,       advisor.mjs        decisions via the advisor
+//                      prompt, result file, waiting       council.mjs        the advisory council's votes
+//   prerequisites.mjs  inserted slices, set aside, resume
 //   agents.mjs         worker tabs and sessions           plan.mjs           plan.md and progress
 //   store.mjs          paths, config, state, lock         quota.mjs          Anthropic quota pacing
 //   usage.mjs          session token usage                console.mjs        console, log.md, events.jsonl

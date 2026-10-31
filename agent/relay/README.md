@@ -55,6 +55,48 @@ Running workers keep working while the script is stopped.
   incomplete, and points out an earlier deferral of the same question in `decisions.md`. A chosen deferral is
   recorded there with those four items. The project's own rules for decisions, where its instructions define
   them, take precedence.
+
+  **Advisory council** (off by default; see Configuration). When it is on, the relay can decide instead of
+  waiting for you:
+  - The advisor's brief also gives each option its exact `action` and its decision classes, and says whether
+    the question needs you (`ownerNeeded`).
+  - You are asked as before, without a vote, when the advisor says the question is yours or recommends an
+    option in a class you keep.
+  - Otherwise two council members, on different models, each get the question and the options without the
+    advisor's recommendation, in a neutral order (labelled `X1`, `X2`…), plus the worker's records, the
+    handoff, the plan and earlier decisions. They vote independently, in parallel, in their own tabs
+    (`/council` prompt): a choice, conditions, the classes of the chosen action, confidence, reversibility,
+    `ownerNeeded`, reasons and a plain-language summary for you.
+  - **The council decides** only when both choose the same listed option and neither vote, nor the advisor's
+    classes for that option, puts it in a class you keep, says you are needed, calls it irreversible, and
+    when not both have low confidence. The advisor then writes the decision from that option's action and the
+    members' conditions; the relay checks it matches the option (no added deferral or prerequisite slice).
+    You get a notification, the decision is recorded as **Decided by the council** with the models, classes
+    and reversibility, and the closing summary lists the run's council decisions. A later decision of yours
+    can overrule it.
+  - **Anything else comes to you** in the advisor's brief, with why the council sent it and each member's
+    proposal in plain words. A member that cannot start, disappears, gives no valid vote after one
+    reminder, or is still working after `council.timeoutMinutes` sends the question to you: one vote never
+    decides. If the advisor cannot write a council decision, you are asked in the worker's tab.
+
+  Classes (the owner keeps E to I by default):
+
+  | Class | Covers |
+  |---|---|
+  | A | Technical choice within the approved scope: behaviour, method, test approach |
+  | B | Meaning of an unclear acceptance clause or handoff, without lowering it |
+  | C | Touching files outside a slice's listed paths, within the topic's handoff |
+  | D | Deferring work to a later slice, the backlog or an already scheduled point, without dropping required work |
+  | E | Widening scope: new features, behaviour beyond the handoff, roadmap changes |
+  | F | Product direction and user experience |
+  | G | Tooling and infrastructure strategy: new dependencies, harnesses, external services |
+  | H | Changes to project rules and contracts: instructions, ADRs, verification gates and thresholds, acceptance criteria |
+  | I | Irreversible or external effects: published formats, data migration, deleting evidence, pushing, money, credentials, licences |
+
+  A project's own rules still take precedence: where they reserve a decision to you, the members say so and
+  it comes to you. Limits: the members share the checkout, so they can come across the advisor's notes or
+  the worker's own preference; and both can misclassify a question the same way, which the records and
+  your overrule are there to catch.
 - **`blocked`:** you get a notification with the problem. Answer or fix it, then reply to the worker in its
   tab. It continues and rewrites its result file, and the relay picks that up.
 - **Stops (exit code 2):** a repair-cycle limit, the scout/architect request limit, or a missing
@@ -75,10 +117,10 @@ Running workers keep working while the script is stopped.
 | `handoff.md` | you / `/handoff` | intent, scope, acceptance, authority |
 | `plan.md` | planner or you | slices (format below); can be edited between slices |
 | `relay.json` | you, optional | per-topic overrides of `config.json` |
-| `decisions.md` | relay (from your answers) | every owner decision of the run; every assignment points workers to it |
+| `decisions.md` | relay | every decision of the run, each marked as decided by you or by the council; every assignment points workers to it |
 | `slices/<id>/*.md` | workers | scout, architecture, implementation and review artifacts |
 | `relay/NNN-<role>.md` | script | assignment given to a worker |
-| `relay/NNN-<role>-<step>.result.json` | worker | the only thing the script reads from a worker |
+| `relay/NNN-<role>-<step>.result.json` | worker | the only thing the script reads from a worker (council votes: `NNN-council1-vote.result.json`) |
 | `relay/state.json`, `relay/log.md` | script | resumable state and a readable history |
 | `relay/events.jsonl` | script | structured history for evaluation (see below) |
 
@@ -88,12 +130,15 @@ One JSON object per line. Every event has `t`, `run` (one ID per relay process),
 
 | type | extra fields |
 |---|---|
-| `run_start` | project, resumed, head, roles (models/thinking), commit, maxRepairCycles, quota |
+| `run_start` | project, resumed, head, roles (models/thinking), commit, maxRepairCycles, quota, council (when enabled) |
 | `slice_start` / `slice_done` | title, needs, base / head, commits, repairCycles, helpRequests, durationMs |
 | `agent_start` | role, agent, model, thinking, session (Pi session file), tab, resumedSession |
 | `step_sent` / `step_result` | role, purpose / status, verdict, blocking, summary, question, checks, durationMs, usage |
 | `operator_wait_start` / `operator_wait_end` | role, status, question / waitedMs |
 | `permission_wait` | role, waitedMs |
+| `advisor_start`, `advisor_brief` | workerRole, question / title, options, recommended |
+| `owner_decision`, `council_decision` | id, title, decision, workerRole, replies, slice |
+| `council_start`, `council_vote`, `council_escalation` | options, members / member, model, choice, classes, confidence, reversibility, ownerNeeded or failed / reasons |
 | `nudge`, `redeliver` | role, purpose, reason |
 | `quota_reading`, `quota_pause`, `quota_pause_end` | fiveHour, sevenDay / until, reason / waitedMs |
 | `run_complete` / `run_stop` | head / reason, kind |
@@ -141,6 +186,15 @@ For roles, only the fields you set are overridden:
   slice in a fresh session. It gets `maxLoops` more review loops (default 2); then the relay stops for you.
   With escalation disabled, `maxRepairCycles` is the flat limit.
 - **Advisor** (`advisor.enabled`, role `advisor`): turns `needs-decision` questions into briefs, as above.
+- **Advisory council** (`council`, roles `council1` and `council2`, default Opus high and Sol high):
+  ```json
+  "council": { "enabled": false, "members": ["council1", "council2"], "ownerClasses": ["E", "F", "G", "H", "I"], "timeoutMinutes": 30 }
+  ```
+  It needs the advisor. Turn it on per topic with `"council": { "enabled": true }` in `relay.json`: like
+  `roles`, the `council` block merges field by field. When it is on, the relay refuses to start unless
+  `members` names exactly two distinct roles that are not worker or advisor roles, each has a model, the two
+  models differ, and `ownerClasses` lists class letters. Change a member's model under `roles` (for example
+  when a subscription ends).
 - **Compaction limit** (`maxCompactionsPerStep`, default 2): a worker that compacts that often within one step
   is interrupted (Escape). An implementer's step is handed to the senior; for the senior or any other role the
   relay stops, and re-running retries the step in a fresh session. `0` disables it.

@@ -27,6 +27,14 @@
     "advisor": {
       "model": "anthropic/claude-opus-5-5",
       "thinking": "medium"
+    },
+    "council1": {
+      "model": "anthropic/claude-opus-5-5",
+      "thinking": "high"
+    },
+    "council2": {
+      "model": "openai-codex/gpt-6.1-sol",
+      "thinking": "high"
     }
   },
   "commit": true,
@@ -46,5 +54,20 @@
   },
   "advisor": {
     "enabled": true
+  },
+  "council": {
+    "enabled": false,
+    "members": [
+      "council1",
+      "council2"
+    ],
+    "ownerClasses": [
+      "E",
+      "F",
+      "G",
+      "H",
+      "I"
+    ],
+    "timeoutMinutes": 30
   }
 }

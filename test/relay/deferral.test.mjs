@@ -25,7 +25,7 @@ test('a deferral option shows its content, and a chosen deferral is recorded wit
   });
   assert.equal(h.run(), 0);
   assert.match(h.output, /\u2605.* 1\. Decide after the benchmark[^\n]*\n[^\n]*Missing information: the timing of the real data\n[^\n]*Expected from: the S3 benchmark[^\n]*\n[^\n]*Decided at: end of S3\n[^\n]*Until then: keep the old path\n[^\n]*2\. Use B now/);
-  assert.match(p.read('decisions.md'), /## D1 · .* · S1 · Wait for the benchmark\n\nPostponed until S3 ends\.\n\n\*\*Deferred\.\*\*\n- Missing information: the timing of the real data\n- Expected from: the S3 benchmark, which measures it\n- Decided at: end of S3\n- Until then: keep the old path\n$/);
+  assert.match(p.read('decisions.md'), /## D1 · .* · S1 · Wait for the benchmark\n\nPostponed until S3 ends\.\n\n\*\*Deferred\.\*\*\n- Missing information: the timing of the real data\n- Expected from: the S3 benchmark, which measures it\n- Decided at: end of S3\n- Until then: keep the old path\n\n\*\*Decided by the owner\.\*\*\n$/);
 });
 
 test('a deferral without its content, or a recommendation not listed first, makes the advisor rewrite the brief', () => {
@@ -46,7 +46,7 @@ test('a deferral without its content, or a recommendation not listed first, make
       return standard(c);
     });
     assert.equal(h.run(), 0);
-    assert.match(p.read('decisions.md'), /## D1 .*\n\nThe owner chose A\.\n$/);
+    assert.match(p.read('decisions.md'), /## D1 .*\n\nThe owner chose A\.\n\n\*\*Decided by the owner\.\*\*\n$/);
     assert.ok(!/advisor unavailable/.test(p.log()));
   }
 });
