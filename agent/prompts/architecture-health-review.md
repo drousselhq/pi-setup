@@ -4,7 +4,7 @@ argument-hint: "[subsystem, recurring friction, or audit focus]"
 ---
 # Review architectural health
 
-Investigate where the existing architecture makes realistic changes or failure handling unnecessarily costly. This is a focused, read-only health review—not a review of one diff, an implementation design, or approval to change the system. It complements `/review` (an in-depth review of one change set, including legibility and test design) and `/architecture` (design for a requested change).
+Investigate where the existing architecture makes realistic changes or failure handling unnecessarily costly. This is a focused, read-only health review—not a review of one diff, an implementation design, or approval to change the system. It complements `/review` (acceptance check of one change set), `/deep-review` (in-depth quality assessment of one change set) and `/architecture` (design for a requested change).
 
 Use the installed `agent-work` skill's rules for the topic folder and existing artifacts; load its actual `SKILL.md` if it is not already available in this context. Follow applicable repository instructions and authoritative contracts. Proposals and report existence do not approve delivery.
 

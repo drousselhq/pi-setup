@@ -41,11 +41,15 @@ stopping. Follow the project's own instructions (AGENTS.md, CONTRIBUTING.md) for
 
 Review your own diff as an independent reviewer would, and fix what you find:
 
-- Try to break every check, comparison, parser, gate or tool you added or changed: give it bad
-  input (empty, duplicated, missing or extra entries, a failed or crashed subprocess, an unknown
-  option, a malformed value). It must fail visibly, not skip or pass. Keep these cases as tests.
-- List the files you changed and compare them with the paths the slice and handoff allow. A change
-  outside them needs authority: ask (`needs-decision` in relay mode) rather than keep it.
+- For every check, comparison, parser, gate or tool you added or changed, establish how it handles
+  bad input (empty, duplicated, missing or extra entries, a failed or crashed subprocess, an unknown
+  option, a malformed value), and test it where existing evidence does not already show it. It must
+  reject the input visibly or recover as the contract specifies (a fallback or default the contract
+  does not name is a silent pass); it must never skip or report success on input it could not
+  process. Keep as tests the cases that guard a real obligation.
+- Where the slice or handoff lists the paths the work may touch, compare the files you changed
+  with them. A change outside them needs an owner permission you can cite (`decisions.md`, the handoff, the
+  slice or the request); otherwise ask (`needs-decision` in relay mode) rather than keep it.
 - Check the project's rules for new code (tests, coverage registration, provenance, file size).
 - Trace each acceptance clause to evidence. A clause covered only in part (some panes, some cases,
   one mode) is not met.
