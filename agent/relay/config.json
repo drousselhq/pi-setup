@@ -56,7 +56,7 @@
     "enabled": true
   },
   "council": {
-    "enabled": false,
+    "enabled": true,
     "members": [
       "council1",
       "council2"

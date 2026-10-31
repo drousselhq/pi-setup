@@ -56,8 +56,7 @@ Running workers keep working while the script is stopped.
   recorded there with those four items. The project's own rules for decisions, where its instructions define
   them, take precedence.
 
-  **Advisory council** (off by default; see Configuration). When it is on, the relay can decide instead of
-  waiting for you:
+  **Advisory council** (on by default; see Configuration). The relay can decide instead of waiting for you:
   - The advisor's brief also gives each option its exact `action` and its decision classes, and says whether
     the question needs you (`ownerNeeded`).
   - You are asked as before, without a vote, when the advisor says the question is yours or recommends an
@@ -188,9 +187,9 @@ For roles, only the fields you set are overridden:
 - **Advisor** (`advisor.enabled`, role `advisor`): turns `needs-decision` questions into briefs, as above.
 - **Advisory council** (`council`, roles `council1` and `council2`, default Opus high and Sol high):
   ```json
-  "council": { "enabled": false, "members": ["council1", "council2"], "ownerClasses": ["E", "F", "G", "H", "I"], "timeoutMinutes": 30 }
+  "council": { "enabled": true, "members": ["council1", "council2"], "ownerClasses": ["E", "F", "G", "H", "I"], "timeoutMinutes": 30 }
   ```
-  It needs the advisor. Turn it on per topic with `"council": { "enabled": true }` in `relay.json`: like
+  It needs the advisor. Turn it off for a topic with `"council": { "enabled": false }` in `relay.json`: like
   `roles`, the `council` block merges field by field. When it is on, the relay refuses to start unless
   `members` names exactly two distinct roles that are not worker or advisor roles, each has a model, the two
   models differ, and `ownerClasses` lists class letters. Change a member's model under `roles` (for example
