@@ -32,22 +32,9 @@ result file you must write before stopping.
 
 ## Artifact: `.agents_work/<topic>/plan.md`
 
-```markdown
-# Plan: <outcome in plain words>
-
-## S1: <slice title>
-Needs: none
-Acceptance:
-- <observable condition>
-Notes: <entry points, scope limits, dependencies on earlier slices>
-
-## S2: ...
-
-## Not planned
-- <useful ideas outside the handoff's scope>
-```
-
-Use exactly `## S<n>: title` headings and a `Needs:` line; a script parses them. Keep it short.
+Write it in the relay plan format, which a script parses: in relay mode your assignment gives it;
+otherwise read it in the "plan.md format" section of `~/.pi/agent/relay/README.md`. Put useful
+extras in its "Not planned" section. Keep it short.
 
 In chat (or the result summary), give the slice count, the first integrated outcome and any open decision.
 

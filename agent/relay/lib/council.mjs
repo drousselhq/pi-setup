@@ -80,6 +80,25 @@ export function advisorOwnerReasons(b) {
   return reasons;
 }
 
+// The vote file format, written into each member's assignment; voteProblem() checks the same fields.
+export function voteFormat(ids) {
+  return `\`\`\`
+{
+  "status": "done",
+  "choice": "${[...ids, 'new'].join(' | ')}",   // an option ID, or "new" when every listed option is clearly wrong
+  "newOption": "only with \\"new\\": the full action workers would take",
+  "conditions": ["limits you add to the chosen action; empty if none"],
+  "classes": ["A"],                  // letters from the class table: the chosen action and its effects
+  "ownerNeeded": null,               // or why the owner must decide even if both members agree
+  "confidence": "${CONFIDENCE.join(' | ')}",
+  "reversibility": "${REVERSIBILITY.join(' | ')}",
+  "reasons": "why this option, with the evidence that decides it (paths, lines, facts)",
+  "objection": "the strongest objection to your own choice, and why it does not change it",
+  "ownerSummary": "for the owner, in plain everyday words: what you propose, why, how sure you are and why, the alternatives you weighed"
+}
+\`\`\``;
+}
+
 export function voteProblem(v, ids) {
   if (!v) return 'You stopped without writing your vote.';
   if (v.status === 'invalid') return `Your vote file is invalid (${v.summary}).`;
@@ -135,7 +154,9 @@ ${classTable()}
 
 ## Your vote
 
-Write it to ${a.council.members[role].votePath}, in the format your instructions give.
+Write it to ${a.council.members[role].votePath} as JSON, in this format:
+
+${voteFormat(a.council.ids)}
 `);
   return file;
 }
@@ -232,7 +253,7 @@ function waitForVotes(cn) {
       m.corrected = true;
       m.sentAt = Date.now();
       save();
-      try { herdrPrompt(agent, `${problem} Write it to ${m.votePath} in the format of your instructions.`); } catch (e) { fail(role, m, e.message); }
+      try { herdrPrompt(agent, `${problem} Write it to ${m.votePath} in the format your assignment gives.`); } catch (e) { fail(role, m, e.message); }
     }
     if (Object.values(cn.members).some((m) => !m.vote && !m.failed)) {
       live(`  ${C.gray(hhmm())}  ${C.cyan('\u25f7')} ${roleTag('council')} ${C.dim(`voting \u00b7 ${fmtDuration(Date.now() - started)}`)}`);

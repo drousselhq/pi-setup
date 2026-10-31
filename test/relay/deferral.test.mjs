@@ -18,6 +18,7 @@ test('a deferral option shows its content, and a chosen deferral is recorded wit
     if (c.role === 'advisor') {
       assert.match(c.assignment(), /earlier deferrals of the same question/);
       assert.match(c.assignment(), /project's own instructions .* take precedence/s);
+      assert.match(c.assignment(), new RegExp(`"deferral": \\{ ${Object.keys(DEFER).map((k) => `"${k}": "\\.\\.\\."`).join(', ')} \\}`));
       c.write(brief({ options: [{ label: 'Decide after the benchmark', consequence: 'wait', deferral: DEFER }, { label: 'Use B now', consequence: 'b' }] }));
       return c.answer(decision({ title: 'Wait for the benchmark', decision: 'Postponed until S3 ends.', deferral: DEFER }));
     }

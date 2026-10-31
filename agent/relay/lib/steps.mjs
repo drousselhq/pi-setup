@@ -49,17 +49,18 @@ export function writeAssignment(role, purpose, slice, task) {
   const questionFields = role === 'advisor' ? '' : '\n  "options": [{ "label": "...", "consequence": "..." }],  // with needs-decision: 2-4 real options'
     + '\n             // an option may propose a prerequisite slice: add "slice": { "title": "...", "acceptance": ["..."], "notes": "..." }'
     + '\n  "recommended": 1, "reason": "why you recommend it",   // with needs-decision';
+  const deferral = `{ ${Object.keys(DEFERRAL_FIELDS).map((k) => `"${k}": "..."`).join(', ')} }`;
   const advisorFields = role !== 'advisor' ? '' : `
   // status needs-decision (the brief for the owner):
   "brief": { "title": "...", "question": "...", "context": "...",
              "options": [{ "label": "...", "consequence": "..." }],  // the recommended option first
              // an option that postpones the decision also carries
-             // "deferral": { "missing": "...", "source": "...", "decisionPoint": "...", "interim": "..." }
+             // "deferral": ${deferral}   (${Object.values(DEFERRAL_FIELDS).join(', ')})
              // with the advisory council enabled, each option also has "action": "exact technical action", "classes": ["A"]
              "recommended": 1, "reason": "...", "notes": [], "ownerNeeded": null },
   // status done (after the owner chose):
   "title": "short decision title", "decision": "the decision as it should be recorded",
-  "deferral": { "missing": "...", "source": "...", "decisionPoint": "...", "interim": "..." },  // only when the owner chose to postpone
+  "deferral": ${deferral},  // only when the owner chose to postpone
   "replies": { "<role>": "instruction or note for that role" },
   "slice": { "title": "...", "acceptance": ["..."], "notes": "..." },  // only when the owner chose a prerequisite slice`;
   const body = `# Relay assignment ${id}: ${role} for ${slice.id} — ${slice.title}

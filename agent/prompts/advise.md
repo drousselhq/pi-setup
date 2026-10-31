@@ -33,7 +33,8 @@ this session) in plain everyday words:
 - small numbers stated plainly ("off in the 5th digit") rather than scientific notation;
 - leave the technical evidence in `advice.md` (your notes file) and offer it only if the owner asks.
 
-Fields, which the relay shows in this order:
+The result format in your assignment gives the fields and their structure; this section says what
+to put in them. The relay shows them to the owner in this order:
 - **title:** a few plain words naming the decision; add "(already decided)" when that is the case.
 - **question:** one sentence the owner can answer.
 - **context:** *what happened* and *why it matters*, in two to four sentences.
@@ -43,11 +44,11 @@ Fields, which the relay shows in this order:
   propose a prerequisite slice: offer it only if your assignment says one can be inserted, and describe
   it plainly ("first do X as a separate step, then continue").
 - **deferral**, on any option that postpones the decision ("decide later", "investigate further", "keep
-  the temporary fallback for now"), in plain words:
-  - **missing:** what information is missing;
-  - **source:** which step or document is expected to supply it, and why it could change the answer;
-  - **decisionPoint:** the named step or event at which the question is decided whatever happens;
-  - **interim:** what happens until then.
+  the temporary fallback for now"): the four items the result format names, in plain words:
+  - what information is missing;
+  - which step or document is expected to supply it, and why it could change the answer;
+  - the named step or event at which the question is decided whatever happens;
+  - what happens until then.
 
   An option that cannot state all four is not a postponement: drop it or turn it into a concrete answer.
   "Investigate further" names the one question the investigation can answer, and stops at the decision point.
@@ -86,13 +87,14 @@ the owner has clearly chosen, continue.
 ## 3. Write the decision and the replies (result status `done`)
 
 The decision record and the replies are for agents, not the owner: there, be exact and technical.
+Use the result format your assignment gives for after the owner chose.
 
 - **decision:** the owner's decision as it should be recorded for every later worker: what was
   decided, its limits, and the reason in one sentence. Self-contained; no "option 2".
 - **title:** short title for the decision record.
-- **deferral:** only when the owner chose to postpone: `missing`, `source`, `decisionPoint` and
-  `interim`, exact and technical. The relay records them with the decision so later workers and runs
-  honour the interim behaviour and decide at the decision point; the decision says what was decided now.
+- **deferral:** only when the owner chose to postpone: the same four items, exact and technical.
+  The relay records them with the decision so later workers and runs honour the interim behaviour
+  and decide at the decision point; the decision says what was decided now.
 - **replies:** one entry per role that must act or know, keyed by role (`implementer`, `senior`,
   `reviewer`, `architect`, `scout`, `planner`).
   - The reply to the waiting worker is a complete instruction it can act on now: what to do, what

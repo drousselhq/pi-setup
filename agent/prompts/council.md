@@ -44,25 +44,11 @@ a reasonable reviewer could differ, `low` when you are close to guessing.
 
 ## 4. Write your vote
 
-Write the vote file named in the assignment as JSON:
+Write the vote file named in the assignment, in the format the assignment gives. Conditions only
+limit the chosen action; they never add scope. The objection is the strongest case against your own
+choice, stated honestly.
 
-```json
-{
-  "status": "done",
-  "choice": "option ID, or \"new\"",
-  "newOption": "only with \"new\": the full action workers would carry out",
-  "conditions": ["limits you add to the chosen action; empty if none"],
-  "classes": ["A"],
-  "ownerNeeded": null,
-  "confidence": "high | medium | low",
-  "reversibility": "easy | costly | irreversible",
-  "reasons": "why this option, with the evidence that decides it (paths, lines, facts)",
-  "objection": "the strongest objection to your own choice, and why it does not change it",
-  "ownerSummary": "for the owner, in plain everyday words: what you propose, why, how sure you are and why, and the alternatives you weighed"
-}
-```
-
-`ownerSummary` follows the owner's register: no code identifiers, file names or rule numbers; short
+The owner summary follows the owner's register: no code identifiers, file names or rule numbers; short
 sentences; small numbers stated plainly. Everything else is for agents: exact and technical. The owner
 reads it whenever the question reaches them, so with low confidence say plainly why you are unsure and
 what would make you sure.

@@ -33,6 +33,11 @@ test('every cross-module name a relay module uses is imported', () => {
   assert.deepEqual(missing, []);
 });
 
+test('the relay README shows the plan format the planner is given', async () => {
+  const { PLAN_FORMAT } = await import(path.join(LIB, 'plan.mjs'));
+  assert.ok(fs.readFileSync(path.join(LIB, '..', 'README.md'), 'utf8').includes(PLAN_FORMAT));
+});
+
 test('runtime.mjs imports no other relay module', () => {
   assert.equal(imported(source['runtime.mjs']).size, 0);
 });

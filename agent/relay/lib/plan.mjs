@@ -56,6 +56,24 @@ export function parsePlan() {
   return slices.map(({ inAcceptance, ...s }) => ({ ...s, body: s.lines.join('\n').trim() }));
 }
 
+// The plan.md format, written into the planner's assignment. The relay README shows the same block
+// (a test keeps them identical). parsePlan() reads the "## S<n>: title" headings, the Needs: line
+// and the Acceptance: bullets.
+export const PLAN_FORMAT = `\`\`\`markdown
+# Plan: <outcome in plain words>
+
+## S1: <slice title>
+Needs: none
+Acceptance:
+- <observable condition>
+Notes: <entry points, scope limits, dependencies on earlier slices>
+
+## S2: ...
+
+## Not planned
+- <useful ideas outside the handoff's scope>
+\`\`\``;
+
 export const PLAN_SLICE = { id: 'PLAN', title: 'Write the slice plan', body: '', needs: [] };
 
 export const FINAL_SLICE = {

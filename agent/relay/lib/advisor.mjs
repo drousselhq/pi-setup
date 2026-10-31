@@ -29,7 +29,7 @@ function briefProblem(b) {
   if (Number(b.brief.recommended) !== 1) return 'Your brief must list the recommended option first and set "recommended" to 1.';
   const bad = options.findIndex((o) => (o?.deferral || POSTPONES.test(o?.label ?? '')) && !validDeferral(o?.deferral));
   if (bad >= 0) {
-    return `Option ${bad + 1} postpones the decision but does not state its "deferral" (missing, source, decisionPoint, interim). `
+    return `Option ${bad + 1} postpones the decision but does not state its "deferral" (${Object.keys(DEFERRAL_FIELDS).join(', ')}). `
       + 'Give all four, or, if you cannot, replace it with a concrete answer: do not offer it as a postponement.';
   }
   return councilEnabled() ? councilBriefProblem(b) : null;

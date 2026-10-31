@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { closeAgent, closeAll } from './agents.mjs';
 import { C, compactionText, emit, event, fmtDuration, GUTTER, log, out, resultIcon, resultLabel, roleTag, shortModel } from './console.mjs';
-import { FINAL_SLICE, parsePlan, PLAN_SLICE, progress, progressText } from './plan.mjs';
+import { FINAL_SLICE, parsePlan, PLAN_FORMAT, PLAN_SLICE, progress, progressText } from './plan.mjs';
 import { cfg, ctx, git, HELP_STATUSES, now, plural, RelayStop, state } from './runtime.mjs';
 import { artifactPath, queue } from './steps.mjs';
 import { save } from './store.mjs';
@@ -24,7 +24,9 @@ export function firstMessage(slice) {
   const prep = slice.needs.map((n) => (n === 'scout' ? 'scout' : 'architect'));
   state.cur.prep = prep;
   if (slice.id === 'PLAN') {
-    return { role: 'planner', purpose: 'plan', initial: true, text: `Break the handoff into slices and write ${ctx.plan} in the relay plan format.` };
+    return { role: 'planner', purpose: 'plan', initial: true, text: `Break the handoff into slices and write ${ctx.plan} in the relay plan format:\n\n${PLAN_FORMAT}\n\n`
+      + 'Use exactly `## S<n>: title` headings. `Needs:` is `none`, or `scout` and/or `architecture` for preparation that runs '
+      + 'before implementation. The relay counts the `Acceptance:` bullets.' };
   }
   if (prep.length) return prepMessage(prep[0], slice);
   return implementMessage(slice);

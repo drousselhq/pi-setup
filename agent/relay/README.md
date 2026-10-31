@@ -148,18 +148,23 @@ reasoning, costUsd and compactions. The full transcripts stay in the Pi session 
 ### plan.md format
 
 ```markdown
-# Plan: <outcome>
+# Plan: <outcome in plain words>
 
 ## S1: <slice title>
-Needs: none            # or: scout, architecture (runs before implementation)
+Needs: none
 Acceptance:
 - <observable condition>
-Notes: <scope limits, entry points>
+Notes: <entry points, scope limits, dependencies on earlier slices>
 
 ## S2: ...
+
+## Not planned
+- <useful ideas outside the handoff's scope>
 ```
 
-Slice IDs (`S1`, `S2`, `S2a`…) must stay stable. Finished slices are tracked by ID in `state.json`.
+The relay writes this format into the planner's assignment. Use exactly `## S<n>: title` headings.
+`Needs:` is `none`, or `scout` and/or `architecture` for preparation that runs before implementation.
+The relay counts the `Acceptance:` bullets. Slice IDs (`S1`, `S2`, `S2a`…) must stay stable. Finished slices are tracked by ID in `state.json`.
 
 ### Result file
 

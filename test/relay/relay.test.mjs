@@ -31,6 +31,22 @@ test('without a plan, the planner writes one first', () => {
   assert.deepEqual(roles(h), ['PLAN:planner', 'S1:implementer', 'S1:reviewer', 'FINAL:implementer']);
 });
 
+test('the planner\'s assignment gives the plan format, and a plan written as that example runs', () => {
+  const p = makeProject({ plan: null });
+  const h = new FakeHerdr(p, (c) => {
+    if (c.role === 'planner') {
+      const format = c.assignment().match(/```markdown\n([\s\S]*?)```/);
+      assert.ok(format, 'the assignment contains the plan format');
+      fs.writeFileSync(p.file('plan.md'), format[1]);
+      return c.write(done('planned'));
+    }
+    return standard(c);
+  });
+  assert.equal(h.run(), 0);
+  // "Needs: none" asks for no scout or architect; "## Not planned" is not a slice.
+  assert.deepEqual(roles(h), ['PLAN:planner', 'S1:implementer', 'S1:reviewer', 'S2:implementer', 'S2:reviewer', 'FINAL:implementer']);
+});
+
 test('a rejected review goes back to the implementer with the blocking findings', () => {
   const p = makeProject({ plan: '# Plan\n\n## S1: Only\nNeeds: none\nAcceptance:\n- x\n' });
   const h = new FakeHerdr(p, (c) => {

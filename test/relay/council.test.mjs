@@ -69,6 +69,9 @@ test('two matching votes decide: recorded as the council\'s, delivered, notified
   assert.match(assignment, /- \*\*X1\*\*: A: fix one\. Action: Fix only the undefined part\.\n- \*\*X2\*\*: B: fix both\. Action: Fix the weight bug completely\./);
   assert.ok(!/SECRET-RECOMMENDATION-REASON|recommended/i.test(assignment.replace('none is recommended', '')), 'members do not see the recommendation');
   assert.match(assignment, /The owner keeps classes E, F, G, H, I/);
+  // The assignment gives the vote format itself, with every field of a vote the relay accepts.
+  assert.match(assignment, /"choice": "X1 \| X2 \| new"/);
+  for (const k of Object.keys(vote())) assert.match(assignment, new RegExp(`"${k}":`), `vote format has ${k}`);
   const final = h.prompts.find((x) => x.role === 'advisor' && x.n === 2).text;
   assert.match(final, /Both members chose option 1, "B: fix both"[\s\S]*- keep the old fixture/);
   assert.match(p.read('decisions.md'), /## D1 · .* · S1 · Fix the weight bug\n\nThe advisory council decided: fix the weight bug completely\.\n\n\*\*Decided by the council\*\* \(both members chose this option independently; council1 low, council2 low; class A; easy to reverse\)\. A later owner decision may overrule this one\.\n$/);
