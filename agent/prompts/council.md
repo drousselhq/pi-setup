@@ -25,10 +25,10 @@ actions, the decision classes, the classes the owner keeps, the records to read 
 
 ## 2. Classify the action, not just the question
 
-Give the classes of the action you choose, including its effects. An action that lowers or reinterprets
-an acceptance criterion, a verification gate or a threshold is class H; one that defers or drops work
-the handoff requires is E or H; one that adds a dependency, harness or external service is G. When an
-action spans several classes, give them all. Set `ownerNeeded` when the decision belongs to the owner
+Give the classes of the action you choose, including its effects, from the decision classes in your
+assignment. Read each class's wording exactly: clarifying an unclear clause without lowering it is not
+the same as lowering a criterion, and deferring work without dropping it is not the same as dropping
+it. When an action spans several classes, give them all. Set `ownerNeeded` when the decision belongs to the owner
 for a reason the classes do not capture (it depends on the owner's preferences, or on facts only the
 owner has).
 

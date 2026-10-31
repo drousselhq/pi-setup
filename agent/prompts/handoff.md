@@ -47,7 +47,7 @@ herdr tab create --workspace <current workspace id> --cwd <project root> --label
 herdr pane run <returned root pane id> "pi-relay <topic>"
 ```
 
-Confirm that it started (`herdr pane read <pane id>` shows "relay started"), report the tab, and
+Confirm that it started (`herdr pane read <pane id>` shows the `pi-relay · <topic>` header), report the tab, and
 stop. Do not coordinate or start workers from this session.
 
 <operator_request>

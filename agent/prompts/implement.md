@@ -26,8 +26,6 @@ stopping. Follow the project's own instructions (AGENTS.md, CONTRIBUTING.md) for
 - Before reporting done, check user-facing behavior through the path the user actually uses (real
   app and native input, real command, real file). Tests and stand-ins (DOM events, WebDriver, mocks)
   do not replace that check; if the real path is unavailable, record it as unverified.
-- A check you add or change (comparison, gate, coverage rule) must fail, not skip or pass, on a
-  missing or unavailable input. Show that it can fail.
 - Run focused checks while working. The project's full verification runs once at the end of the
   work (in relay mode it is a separate final step), not after every slice.
 - Update documentation directly affected by the change. When you remove, rename or change a fact,
@@ -38,6 +36,21 @@ stopping. Follow the project's own instructions (AGENTS.md, CONTRIBUTING.md) for
 - When distinct work with its own outcome must come first, stop before writing code for it and ask
   (`needs-decision`) with an option that proposes it as a prerequisite slice (see the result format).
 - Stop when the acceptance conditions are met and checks pass. Do not start an improvement pass.
+
+## Before reporting done
+
+Review your own diff as an independent reviewer would, and fix what you find:
+
+- Try to break every check, comparison, parser, gate or tool you added or changed: give it bad
+  input (empty, duplicated, missing or extra entries, a failed or crashed subprocess, an unknown
+  option, a malformed value). It must fail visibly, not skip or pass. Keep these cases as tests.
+- List the files you changed and compare them with the paths the slice and handoff allow. A change
+  outside them needs authority: ask (`needs-decision` in relay mode) rather than keep it.
+- Check the project's rules for new code (tests, coverage registration, provenance, file size).
+- Trace each acceptance clause to evidence. A clause covered only in part (some panes, some cases,
+  one mode) is not met.
+
+Record this self-check briefly in your artifact.
 
 ## Review repairs
 

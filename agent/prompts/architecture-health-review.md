@@ -4,9 +4,9 @@ argument-hint: "[subsystem, recurring friction, or audit focus]"
 ---
 # Review architectural health
 
-Investigate where the existing architecture makes realistic changes or failure handling unnecessarily costly. This is a focused, read-only health review—not a review of one diff, an implementation design, or approval to change the system. It complements `/review` (specified implementation work) and `/architecture` (design for a requested change).
+Investigate where the existing architecture makes realistic changes or failure handling unnecessarily costly. This is a focused, read-only health review—not a review of one diff, an implementation design, or approval to change the system. It complements `/review` (an in-depth review of one change set, including legibility and test design) and `/architecture` (design for a requested change).
 
-Use the installed `agent-work` skill for work-item and report discovery; load its actual `SKILL.md` if it is not already available in this context. Follow applicable repository instructions and authoritative contracts. Proposals and report existence do not approve delivery.
+Use the installed `agent-work` skill's rules for the topic folder and existing artifacts; load its actual `SKILL.md` if it is not already available in this context. Follow applicable repository instructions and authoritative contracts. Proposals and report existence do not approve delivery.
 
 ## Scope and investigation
 
@@ -22,9 +22,9 @@ Inspect only what is useful to establish a focused, evidence-backed account. Do 
 
 ## Report
 
-Unless the operator asks for chat-only, use the resolved active topic's `.agents_work/<topic>/architecture-health-review.md`. Follow `agent-work` topic discovery, existing-artifact, and ignored-coverage rules before writing. Do not overwrite `review.md` or `architecture.md`, unrelated work, or an unexpected existing report; resolve a name conflict under those rules or ask. Write only this scoped report and useful permitted evidence.
+Unless the operator asks for chat-only, use the resolved active topic's `.agents_work/<topic>/architecture-health-review.md`. Follow those `agent-work` rules (topic folder, existing artifacts, Git-ignored `.agents_work/`) before writing. Do not overwrite `review.md` or `architecture.md`, unrelated work, or an unexpected existing report; resolve a name conflict under those rules or ask. Write only this scoped report and useful permitted evidence.
 
-State the inspected scope, source/candidate identity (including material dirty changes when relevant), and what was not assessed. Separate evidence-backed defects, maintenance opportunities, and unverified hypotheses. A small set of useful findings is better than a quota; doing nothing is a valid recommendation. Do not assign universal health scores or promise that a system is universally healthy.
+Open the report with the recommendation, key conclusion, evidence limits and what remains unverified. State the inspected scope, source/candidate identity (including material dirty changes when relevant), and what was not assessed. Separate evidence-backed defects, maintenance opportunities, and unverified hypotheses. A small set of useful findings is better than a quota; doing nothing is a valid recommendation. Do not assign universal health scores or promise that a system is universally healthy.
 
 For each actionable opportunity explain:
 - the current friction and concrete evidence, who or what bears its cost, and the representative change or failure affected;
@@ -35,9 +35,7 @@ For each actionable opportunity explain:
 
 Describe before/after responsibilities plainly. Include a diagram only when it clarifies a real relationship. Recommend the most useful follow-up—or no action—not a launch, automatic ticket, or mandatory next agent.
 
-## Handoff
-
-Finish the report with a concise handoff: recommendation, artifact path, evidence limits, and what remains unverified. In chat, give the report path (or state that the response is chat-only), key conclusion, and material limits. Do not claim model-backed execution or architectural health was verified.
+In chat, give the report path (or state that the response is chat-only), key conclusion, and material limits. Do not claim model-backed execution or architectural health was verified.
 
 <operator_request>
 $ARGUMENTS

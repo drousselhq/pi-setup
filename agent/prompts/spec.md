@@ -6,7 +6,7 @@ argument-hint: "[request in your own words]"
 
 Turn the operator's request and relevant discussion into a precise feature specification. Separate agreed intent from suggestions and unresolved choices. This assignment defines behavior, not implementation architecture.
 
-Use the `agent-work` skill for work-item resolution and shared artifacts; load its `SKILL.md` if it is not already available in this context.
+Use the `agent-work` skill's rules for the topic folder and existing artifacts; load its `SKILL.md` if it is not already available in this context.
 
 ## Work
 
@@ -20,7 +20,7 @@ Use the `agent-work` skill for work-item resolution and shared artifacts; load i
 
 ## Artifact
 
-Create or update `.agents_work/<topic>/spec.md` with:
+Create or update `.agents_work/<topic>/spec.md`. Open it with a short summary, understandable without the conversation: the behavior now specified, consequential decisions and remaining questions. Then:
 
 - **Intent and scope:** problem, users, desired result, non-goals.
 - **Required behavior:** ordinary flow, meaningful states, edges, failure behavior, and compatibility constraints.
@@ -29,11 +29,7 @@ Create or update `.agents_work/<topic>/spec.md` with:
 
 Scale detail to the work. A small fix does not need a product manifesto. An unresolved material question makes this a draft; do not label it approved or ready for implementation on the operator's behalf.
 
-## Handoff
-
-End with a concise **Handoff** identifying the behavior now specified, consequential decisions, remaining questions, and the most useful evidence or references. Make it understandable without the conversation. Do not repeat the entire specification or prescribe the next role.
-
-In chat, give the artifact path, a short outcome, and any decision the operator still needs to make.
+Do not prescribe the next role. In chat, give the artifact path, a short outcome, and any decision the operator still needs to make.
 
 <operator_request>
 $ARGUMENTS

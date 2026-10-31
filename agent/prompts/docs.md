@@ -6,7 +6,7 @@ argument-hint: "[documentation task, in your own words]"
 
 Create or improve user-facing documentation for the operator's requested scope. Help readers accomplish real tasks and understand the product accurately. Do not redesign the product or build a new documentation platform unless explicitly requested.
 
-Use the `agent-work` skill for work-item resolution and shared artifacts; load its `SKILL.md` if it is not already available in this context.
+Use the `agent-work` skill's rules for the topic folder and existing artifacts; load its `SKILL.md` if it is not already available in this context.
 
 ## Work
 
@@ -22,15 +22,11 @@ Use the `agent-work` skill for work-item resolution and shared artifacts; load i
 
 Write the actual user documentation in the project's established location. When none exists, choose the smallest suitable location consistent with the request; do not create an empty documentation hierarchy.
 
-Create or update `.agents_work/<topic>/docs.md` as a concise documentation-work record: intended readers/tasks, pages changed, relevant behavior/source references, checks performed, and known gaps. The full user guide belongs in the durable docs, not in this handoff record.
+Create or update `.agents_work/<topic>/docs.md` as a concise documentation-work record, result first: the user outcomes now documented and important entry pages, content ready for use versus actually published, and outstanding accuracy or publication issues; then intended readers/tasks, pages changed, relevant behavior/source references, checks performed, and known gaps. The full user guide belongs in the durable docs, not in this work record.
 
 Keep product source unchanged unless the operator separately authorized a necessary implementation change. Report a behavior/documentation mismatch rather than silently fixing the product to fit the prose.
 
-## Handoff
-
-End the work record with a concise **Handoff** of the user outcomes now documented, important entry pages, verified examples/builds/links, and outstanding accuracy or publication issues. Distinguish content ready for use from content actually published. Do not prescribe the next role.
-
-In chat, give the user-doc paths, work-record path, result, and verification limits.
+Do not prescribe the next role. In chat, give the user-doc paths, work-record path, result, and verification limits.
 
 <operator_request>
 $ARGUMENTS
