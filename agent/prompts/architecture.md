@@ -32,8 +32,9 @@ file, read it first: it fixes the scope, paths and the result file you must writ
 ## Artifact
 
 Write the design (path from the assignment, else `.agents_work/<topic>/architecture.md`). Lead
-with the decisions and their reasons. On revision, say what changed and why. Mark the design
-**draft** if a material decision is still open.
+with the decisions and their reasons. On revision, say what changed and why. In relay mode, a
+material decision still open is asked (`needs-decision`), never passed on in a design reported
+`done`. Standalone, mark the design **draft** if a material decision is still open.
 
 In chat (or the result summary), give the path, the key decisions and any decision needing the operator.
 

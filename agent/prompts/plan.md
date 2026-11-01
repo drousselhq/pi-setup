@@ -26,7 +26,9 @@ result file you must write before stopping.
   handoff and existing code do not settle (ownership, data format, concurrency, public contract).
   Mark `Needs: scout` only when the implementer would otherwise have to explore a large unknown
   area. Most slices need neither.
-- Final full-suite verification is added automatically after the last slice; do not plan it.
+- The relay adds a final full-suite verification after the last slice; do not plan it as a slice.
+  Standalone, note in the plan (outside the slices) that the full verification runs after the
+  last slice.
 - If the handoff leaves a product decision open that changes the slices, ask it (status
   `needs-decision` in relay mode) instead of guessing.
 

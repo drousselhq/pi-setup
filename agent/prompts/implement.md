@@ -27,7 +27,8 @@ stopping. Follow the project's own instructions (AGENTS.md, CONTRIBUTING.md) for
   app and native input, real command, real file). Tests and stand-ins (DOM events, WebDriver, mocks)
   do not replace that check; if the real path is unavailable, record it as unverified.
 - Run focused checks while working. The project's full verification runs once at the end of the
-  work (in relay mode it is a separate final step), not after every slice.
+  work (in relay mode it is a separate final step), not after every slice, unless the project's
+  own instructions require it earlier (for example before every hand-back).
 - Update documentation directly affected by the change. When you remove, rename or change a fact,
   find its references with at least two different searches and update each one.
 - When stuck on a real design question, request architecture help (`needs-architecture` in relay
