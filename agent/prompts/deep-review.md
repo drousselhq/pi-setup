@@ -89,7 +89,8 @@ Assess the tests added or changed, and the existing tests the change relies on:
   you executed it; label it as predicted or observed and cite the assertions. Finding no coupling is
   a valid result. Coupling alone is not a defect: show that the affected assertion guards an
   unchanged obligation and that decoupling keeps its regression power. Keep justified focused or
-  private tests (numerical, lifecycle, independent-oracle checks); behaviour tests complement them.
+  private tests (for example of invariants a behaviour test cannot reach); behaviour tests
+  complement them.
 
 ## Rules of engagement
 

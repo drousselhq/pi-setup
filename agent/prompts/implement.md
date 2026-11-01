@@ -50,8 +50,8 @@ Review your own diff as an independent reviewer would, and fix what you find:
 - Where the slice or handoff lists the paths the work may touch, compare the files you changed
   with them. A change outside them needs an owner permission you can cite (`decisions.md`, the handoff, the
   slice or the request); otherwise ask (`needs-decision` in relay mode) rather than keep it.
-- Check the project's rules for new code (tests, coverage registration, provenance, file size).
-- Trace each acceptance clause to evidence. A clause covered only in part (some panes, some cases,
+- Check the project's rules for new code (for example required tests, coverage or file size).
+- Trace each acceptance clause to evidence. A clause covered only in part (some cases, some platforms,
   one mode) is not met.
 
 Record this self-check briefly in your artifact.

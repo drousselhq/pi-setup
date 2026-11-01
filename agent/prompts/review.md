@@ -43,13 +43,13 @@ to the candidate, say that this is self-review rather than an independent review
   fallback or default the contract does not name is a silent pass); skipping or reporting success
   on input it could not process is a blocking finding.
 - Where the slice or handoff lists the paths the work may touch, compare the changed files with
-  them; do not infer a list that is not written. Check the project's rules for new code (tests,
-  coverage registration, provenance, file size) against what was added.
+  them; do not infer a list that is not written. Check the project's rules for new code (for
+  example required tests, coverage or file size) against what was added.
 - Check that important new tests would fail if the behaviour regressed, and that no test was
   deleted, skipped or loosened to make the change pass (justified updates for approved changes are
   fine). To compare with the base, read it (`git show <base>:<path>`); never switch, stash or reset
   the working tree.
-- Trace each acceptance clause to evidence. A clause covered only in part (some panes, some cases,
+- Trace each acceptance clause to evidence. A clause covered only in part (some cases, some platforms,
   one mode) is not met.
 - Note maintenance debt this change introduces only when it has a concrete consequence
   (duplicated rules, leaked internals, ordering obligations on callers).
