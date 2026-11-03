@@ -3,6 +3,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { advisorEnabled, consultAdvisor } from './advisor.mjs';
+import { acceptanceProblem, setAsideNote } from './acceptance.mjs';
 import { agentAlive, ensureAgent } from './agents.mjs';
 import { C, callout, clearLive, compactionText, emit, event, fmtDuration, hhmm, live, log, purposeLabel, roleTag } from './console.mjs';
 import { run } from './io.mjs';
@@ -20,11 +21,15 @@ export function sliceDir(id) {
 
 export function artifactPath(role, sliceId) {
   if (role === 'planner') return ctx.plan;
-  const file = { scout: 'scout.md', architect: 'architecture.md', implementer: 'implementation.md', senior: 'implementation.md', reviewer: 'review.md', advisor: 'advice.md' }[role];
+  const file = { scout: 'scout.md', architect: 'architecture.md', acceptance: 'acceptance.md', implementer: 'implementation.md', senior: 'implementation.md', reviewer: 'review.md', advisor: 'advice.md' }[role];
   return path.join(sliceDir(sliceId), file);
 }
 
 export function gitRules(role) {
+  if (role === 'acceptance') {
+    return 'Write only new files: the tests (and their expectation fixtures) for this slice, your artifact and the result file. '
+      + 'Do not edit existing files. No Git writes.';
+  }
   if (role !== 'implementer' && role !== 'senior') {
     return 'Do not edit product files (code, tests, configuration, docs). Write only your artifact and the result file. No Git writes.';
   }
@@ -39,12 +44,15 @@ export function writeAssignment(role, purpose, slice, task) {
   const id = `${String(++state.seq).padStart(3, '0')}-${role}`;
   const file = path.join(ctx.relayDir, `${id}.md`);
   const statuses = STATUSES[role].map((s) => `\`${s}\``).join(', ');
-  const others = ['scout', 'architect', 'implementer', 'reviewer']
+  const others = ['scout', 'architect', 'acceptance', 'implementer', 'reviewer']
     .filter((r) => r !== role && slice.id !== 'PLAN')
     .map((r) => artifactPath(r, slice.id))
     .filter((p) => fs.existsSync(p) && p !== artifactPath(role, slice.id));
   const reviewerFields = role === 'reviewer'
     ? '\n  "verdict": "accept | changes-required",   // required when status is done\n  "blocking": ["R1"],                       // IDs of findings that must be fixed; empty when accepting'
+    : '';
+  const testFields = role === 'acceptance'
+    ? '\n  "tests": ["path/of/a/new/file"],          // with status done: every file you created, relative to the project checkout'
     : '';
   const questionFields = role === 'advisor' ? '' : '\n  "options": [{ "label": "...", "consequence": "..." }],  // with needs-decision: 2-4 real options'
     + '\n             // an option may propose a prerequisite slice: add "slice": { "title": "...", "acceptance": ["..."], "notes": "..." }'
@@ -82,7 +90,7 @@ Pre-existing uncommitted changes when the relay started (not this work; never st
 \`\`\`
 ${state.startStatus || '(none)'}
 \`\`\`
-
+${setAsideNote()}
 ## Slice
 ${slice.body || slice.title}
 
@@ -106,7 +114,7 @@ Each message names a result path. Before you stop, write JSON there:
 {
   "status": "<one of: ${STATUSES[role].join(' | ')}>",
   "summary": "two or three plain sentences: what you did and the outcome",
-  "question": "the one precise question, only for needs-* or blocked",${reviewerFields}${questionFields}${advisorFields}
+  "question": "the one precise question, only for needs-* or blocked",${reviewerFields}${testFields}${questionFields}${advisorFields}
   "checks": ["command → pass/fail", "..."],
   "artifact": "${artifactPath(role, slice.id)}"
 }
@@ -141,6 +149,7 @@ export function readResult(file, since) {
 export function valid(role, r) {
   if (!r || !STATUSES[role].includes(r.status)) return false;
   if (role === 'reviewer' && r.status === 'done') return ['accept', 'changes-required'].includes(r.verdict);
+  if (role === 'acceptance' && r.status === 'done') return acceptanceProblem(r) === null;
   if (role === 'advisor' && r.status === 'done') {
     return typeof r.decision === 'string' && r.decision.trim() !== '' && (r.slice === undefined || r.slice === null || validSliceSpec(r.slice))
       && (r.deferral === undefined || r.deferral === null || validDeferral(r.deferral));
@@ -365,7 +374,8 @@ export function collect() {
       continue;
     }
     nudged = true;
-    const problem = r ? `Your result file is invalid (${r.summary ?? `status "${r.status}"`}).`
+    const why = r && p.role === 'acceptance' && r.status === 'done' ? acceptanceProblem(r) : null;
+    const problem = r ? `Your result file is invalid (${why ?? r.summary ?? `status "${r.status}"`}).`
       : 'You stopped without writing the result file (possibly cut off by a provider error). If your step is unfinished, continue it now.';
     emit('nudge', { role: p.role, purpose: p.purpose, reason: r ? 'invalid-result' : 'missing-result' });
     log(`${state.cur.slice} ${p.role}: ${problem} Nudging once.`, { quiet: true });

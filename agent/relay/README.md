@@ -3,12 +3,12 @@
 A script, not an LLM, coordinates the work. It runs one slice at a time:
 
 ```
-PLAN (only if plan.md is missing) → for each slice: [scout] [architect] → implement → review ⇄ repair → next
+PLAN (only if plan.md is missing) → for each slice: [scout] [architect] [acceptance] → implement → review ⇄ repair → next
 → FINAL (full verification, reviewed only if it changed something) → done
 ```
 
 Workers are fresh Pi sessions in visible Herdr tabs, started with the role's model.
-They use the `/plan`, `/scout`, `/architecture`, `/implement` and `/review` templates.
+They use the `/plan`, `/scout`, `/architecture`, `/acceptance`, `/implement` and `/review` templates.
 The implementer and reviewer keep their sessions for the whole slice; all tabs close when
 the slice is done. Session files are kept, and their paths are listed in `relay/state.json`.
 
@@ -107,7 +107,10 @@ Running workers keep working while the script is stopped.
   resumes the set-aside slice with the same worker sessions, a new base at the current commit and the advisor's
   reply. You can also do it by hand: stop the relay, add the slice to `plan.md` ahead of the current one and re-run.
   Either way only a slice with no commits or changes yet is set aside; otherwise the relay stops and says so.
-  Do not edit `relay/state.json`.
+  Its acceptance tests (see "Acceptance tests before the code") do not count as changes: they stay in the
+  working tree, and every assignment of the prerequisite slice lists them as not its work. A red or
+  non-compiling acceptance test can break that slice's build or test discovery (for example a crate-wide
+  `cargo test`) until its worker excludes it, as it is told to. Do not edit `relay/state.json`.
 
 ## Files
 
@@ -117,7 +120,8 @@ Running workers keep working while the script is stopped.
 | `plan.md` | planner or you | slices (format below); can be edited between slices |
 | `relay.json` | you, optional | per-topic overrides of `config.json` |
 | `decisions.md` | relay | every decision of the run, each marked as decided by you or by the council; every assignment points workers to it |
-| `slices/<id>/*.md` | workers | scout, architecture, implementation and review artifacts |
+| `slices/<id>/*.md` | workers | scout, architecture, acceptance, implementation and review artifacts |
+| `slices/<id>/acceptance-original/` | script | the acceptance tests as their worker wrote them (see below) |
 | `relay/NNN-<role>.md` | script | assignment given to a worker |
 | `relay/NNN-<role>-<step>.result.json` | worker | the only thing the script reads from a worker (council votes: `NNN-council1-vote.result.json`) |
 | `relay/state.json`, `relay/log.md` | script | resumable state and a readable history |
@@ -139,6 +143,7 @@ One JSON object per line. Every event has `t`, `run` (one ID per relay process),
 | `owner_decision`, `council_decision` | id, title, decision, workerRole, replies, slice |
 | `council_start`, `council_vote`, `council_escalation` | options, members / member, model, choice, classes, confidence, reversibility, ownerNeeded or failed / reasons |
 | `nudge`, `redeliver` | role, purpose, reason |
+| `acceptance_recorded`, `acceptance_compared` | tests, snapshot / changed, missing (acceptance files, before each review) |
 | `quota_reading`, `quota_pause`, `quota_pause_end` | fiveHour, sevenDay / until, reason / waitedMs |
 | `run_complete` / `run_stop` | head / reason, kind |
 
@@ -163,7 +168,8 @@ Notes: <entry points, scope limits, dependencies on earlier slices>
 ```
 
 The relay writes this format into the planner's assignment. Use exactly `## S<n>: title` headings.
-`Needs:` is `none`, or `scout` and/or `architecture` for preparation that runs before implementation.
+`Needs:` is `none`, or any of `scout`, `architecture` and `acceptance` for preparation that runs before
+implementation, always in that order.
 The relay counts the `Acceptance:` bullets. Slice IDs (`S1`, `S2`, `S2a`…) must stay stable. Finished slices are tracked by ID in `state.json`.
 
 ### Result file
@@ -171,10 +177,29 @@ The relay counts the `Acceptance:` bullets. Slice IDs (`S1`, `S2`, `S2a`…) mus
 ```json
 { "status": "done | needs-scout | needs-architecture | needs-decision | blocked",
   "summary": "...", "question": "...", "verdict": "accept | changes-required",
-  "blocking": ["R1"], "checks": ["cmd → pass"], "artifact": "path" }
+  "blocking": ["R1"], "tests": ["path"], "checks": ["cmd → pass"], "artifact": "path" }
 ```
 
-`verdict` and `blocking` are for the reviewer only. Allowed statuses differ by role (see the assignment).
+`verdict` and `blocking` are for the reviewer only, `tests` for the acceptance worker only. Allowed statuses
+differ by role (see the assignment).
+
+### Acceptance tests before the code
+
+A slice with `Needs: acceptance` gets an **acceptance** worker after its scout and architect (`/acceptance`
+prompt; its model is the topic's reviewer model unless `roles.acceptance` sets one). Before any
+implementation exists, it writes tests from the requirement sources (handoff, slice, `decisions.md`, the
+project's specifications) in new files only, records in `slices/<id>/acceptance.md` which clause each test
+checks and what it showed before implementation, and lists the files in `tests`.
+
+- **Checked:** with status `done`, `tests` must list readable new files inside the project (not ignored, not
+  under `.agents_work/` or `.git/`, absent when the step started), and they must be exactly what the step
+  changed, without commits. Otherwise the worker is reminded once with the reason, then you are asked.
+- **Kept:** the relay copies them to `slices/<id>/acceptance-original/` and re-baselines the slice, so they
+  are not counted as its changes (a prerequisite slice can still be set aside).
+- **Reported, never enforced:** the implementer is told to adapt their binding only and commit them with
+  its work. Every review and re-review message names the files that changed or went missing since they were
+  written; the reviewer judges each changed expectation. The relay does not run the tests and never blocks
+  on them.
 
 ## Configuration
 

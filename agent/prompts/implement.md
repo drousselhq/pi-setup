@@ -23,6 +23,13 @@ stopping. Follow the project's own instructions (AGENTS.md, CONTRIBUTING.md) for
   relay mode) before building a workaround. Never pick the worse approach silently.
 - Add meaningful behavior and regression tests for the changed risk. Respect the project's coverage
   and file-size rules without padding.
+- When acceptance tests were written for this work before implementation (an acceptance record
+  names them), they express the requirement. Adapt their binding (names, signatures, fixture paths)
+  to the real interface where needed and record each change; never change an expected result to
+  make it pass. If you believe one is wrong, explain why in your record, citing the requirement
+  source; changing what acceptance requires needs the authority it always needs. Record, per
+  acceptance test, its first result once bound: passed; failed and revealed a defect you then fixed;
+  judged wrong; or environment unavailable.
 - Before reporting done, check user-facing behavior through the path the user actually uses (real
   app and native input, real command, real file). Tests and stand-ins (DOM events, WebDriver, mocks)
   do not replace that check; if the real path is unavailable, record it as unverified.

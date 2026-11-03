@@ -29,6 +29,8 @@ export function setup(topic) {
   // Roles and the council block merge field by field; other settings are replaced whole.
   setCfg({ ...global, ...local, roles: { ...global.roles }, council: { ...global.council, ...local.council } });
   for (const [role, v] of Object.entries(local.roles ?? {})) cfg.roles[role] = { ...cfg.roles[role], ...v };
+  // The acceptance worker defaults to the topic's resolved reviewer model; set fields override it.
+  if (cfg.roles.reviewer) cfg.roles.acceptance = { ...cfg.roles.reviewer, ...cfg.roles.acceptance };
 
   setState(readJson(ctx.stateFile, { seq: 0, slices: {}, cur: null, sessions: [] }));
   if (state.startStatus === undefined) {

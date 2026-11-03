@@ -27,7 +27,7 @@ ask once for a local exclusion (`.git/info/exclude`) instead of editing tracked 
 | `handoff.md` | agreed intent, scope, acceptance, authority |
 | `plan.md` | relay slices (`## S1: title`, `Needs:`, `Acceptance:`) |
 | `decisions.md` | decisions for this work, by the owner or the relay's advisory council (written by the relay); read before asking anything already settled |
-| `slices/<id>/scout.md`, `architecture.md`, `implementation.md`, `review.md` | per-slice role records in relay runs |
+| `slices/<id>/scout.md`, `architecture.md`, `acceptance.md`, `implementation.md`, `review.md` | per-slice role records in relay runs |
 | `scout.md`, `architecture.md`, `spec.md`, `docs.md`, … | the same records when used standalone |
 | `evidence/` | useful raw output or reproductions |
 | `relay/` | owned by the pi-relay script: do not edit |

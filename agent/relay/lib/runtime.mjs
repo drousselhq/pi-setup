@@ -11,12 +11,13 @@ export const HUMAN_STATUSES = new Set(['needs-decision', 'blocked']);
 
 export const HELP_STATUSES = { 'needs-scout': 'scout', 'needs-architecture': 'architect' };
 
-export const TEMPLATE = { planner: 'plan', scout: 'scout', architect: 'architecture', implementer: 'implement', senior: 'implement', reviewer: 'review', advisor: 'advise' };
+export const TEMPLATE = { planner: 'plan', scout: 'scout', architect: 'architecture', implementer: 'implement', senior: 'implement', reviewer: 'review', advisor: 'advise', acceptance: 'acceptance' };
 
 export const STATUSES = {
   planner: ['done', 'needs-decision', 'blocked'],
   scout: ['done', 'needs-decision', 'blocked'],
   architect: ['done', 'needs-decision', 'blocked'],
+  acceptance: ['done', 'needs-decision', 'blocked'],
   implementer: ['done', 'needs-scout', 'needs-architecture', 'needs-decision', 'blocked'],
   senior: ['done', 'needs-scout', 'needs-architecture', 'needs-decision', 'blocked'],
   advisor: ['needs-decision', 'done', 'blocked'],

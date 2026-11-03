@@ -25,7 +25,13 @@ result file you must write before stopping.
 - Mark `Needs: architecture` only when the slice has a consequential design choice that the
   handoff and existing code do not settle (ownership, data format, concurrency, public contract).
   Mark `Needs: scout` only when the implementer would otherwise have to explore a large unknown
-  area. Most slices need neither.
+  area. Mark `Needs: acceptance` when the slice changes a consequential observable contract
+  (product behaviour, a comparator or verifier, a parser or format, or behaviour it must preserve
+  at real regression risk) and its tests can bind to something stable: an existing entry point or
+  test harness, or interfaces settled by `Needs: architecture` in the same slice. Its acceptance
+  tests are then written from the requirement sources before implementation. Not for
+  documentation, pure refactors or work without an executable contract. The handoff can require
+  it. Most slices need none of these.
 - The relay adds a final full-suite verification after the last slice; do not plan it as a slice.
   Standalone, note in the plan (outside the slices) that the full verification runs after the
   last slice.

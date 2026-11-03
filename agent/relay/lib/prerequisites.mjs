@@ -1,14 +1,15 @@
 // pi-relay: Prerequisite slices: inserting them, setting the current slice aside and resuming it.
 
 import fs from 'node:fs';
+import { resumeNote } from './acceptance.mjs';
 import { closeAgent, closeAll } from './agents.mjs';
+import { sliceBaseline, sliceChanged } from './changes.mjs';
 import { C, emit, event, heading, log } from './console.mjs';
 import { run } from './io.mjs';
 import { parsePlan, sliceProgress } from './plan.mjs';
 import { ctx, git, now, RelayStop, RUN_ID, state } from './runtime.mjs';
 import { queue } from './steps.mjs';
 import { save } from './store.mjs';
-import { sliceBaseline, sliceChanged } from './transitions.mjs';
 
 // Writes a decided prerequisite slice into plan.md just before `current` and returns its id: the
 // previous slice's number with the next free letter (S2 -> S2b, S2c, ...; S0 before S1).
@@ -102,6 +103,7 @@ export function resumeSetAside(slice) {
         + 'review covers only changes made after it. Continue your current step.',
     });
   }
+  resumeNote(entry.resume?.role ?? c.queued?.role);
   emit('slice_resumed', { before: entry.before, base: state.cur.base });
   log(`${slice.id} resumed after ${entry.before}; new base ${state.cur.base}`, { quiet: true });
   heading(`${slice.id}  ${slice.title}`, `resumed after ${entry.before} \u00b7 ${sliceProgress(slice)}`);

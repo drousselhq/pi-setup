@@ -2,6 +2,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { sliceBaseline } from './changes.mjs';
 import { C, callout, compactionText, emit, heading, log, out, purposeLabel, resetConsole, ROLE_COLOR, roleTag, setTTY, shortModel } from './console.mjs';
 import { checkCouncilConfig } from './council.mjs';
 import { realIo } from './io.mjs';
@@ -11,7 +12,7 @@ import { usageCache } from './quota.mjs';
 import { cfg, ctx, git, herdr, io, notify, plural, RelayStop, RUN_ID, setCfg, setIo, setRunId, setState, state } from './runtime.mjs';
 import { collect, queue, send } from './steps.mjs';
 import { acquireLock, save, setup } from './store.mjs';
-import { currentSlice, firstMessage, sliceBaseline, transition } from './transitions.mjs';
+import { currentSlice, firstMessage, transition } from './transitions.mjs';
 import { sessionCache } from './usage.mjs';
 
 export function runSlice(slice) {

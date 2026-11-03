@@ -1,9 +1,8 @@
 // pi-relay: What happens after each result: the next step, review loops, escalation, finishing a slice.
 
-import { createHash } from 'node:crypto';
-import fs from 'node:fs';
-import path from 'node:path';
+import { acceptanceStep, implementerNote, PREP_ORDER, recordAcceptance, reviewerNote } from './acceptance.mjs';
 import { closeAgent, closeAll } from './agents.mjs';
+import { sliceChanged } from './changes.mjs';
 import { C, compactionText, emit, event, fmtDuration, GUTTER, log, out, resultIcon, resultLabel, roleTag, shortModel } from './console.mjs';
 import { FINAL_SLICE, parsePlan, PLAN_FORMAT, PLAN_SLICE, progress, progressText } from './plan.mjs';
 import { cfg, ctx, git, HELP_STATUSES, now, plural, RelayStop, state } from './runtime.mjs';
@@ -21,18 +20,20 @@ export function currentSlice() {
 }
 
 export function firstMessage(slice) {
-  const prep = slice.needs.map((n) => (n === 'scout' ? 'scout' : 'architect'));
+  const roles = slice.needs.map((n) => (n === 'architecture' ? 'architect' : n));
+  const prep = PREP_ORDER.filter((r) => roles.includes(r)); // fixed order: acceptance tests bind to the architect's interfaces
   state.cur.prep = prep;
   if (slice.id === 'PLAN') {
     return { role: 'planner', purpose: 'plan', initial: true, text: `Break the handoff into slices and write ${ctx.plan} in the relay plan format:\n\n${PLAN_FORMAT}\n\n`
-      + 'Use exactly `## S<n>: title` headings. `Needs:` is `none`, or `scout` and/or `architecture` for preparation that runs '
-      + 'before implementation. The relay counts the `Acceptance:` bullets.' };
+      + 'Use exactly `## S<n>: title` headings. `Needs:` is `none`, or any of `scout`, `architecture` and `acceptance` for '
+      + 'preparation that runs before implementation. The relay counts the `Acceptance:` bullets.' };
   }
   if (prep.length) return prepMessage(prep[0], slice);
   return implementMessage(slice);
 }
 
 export function prepMessage(role, slice) {
+  if (role === 'acceptance') return acceptanceStep(slice);
   return role === 'scout'
     ? { role, purpose: 'prep', initial: true, text: `Establish the repository facts the implementer needs for slice ${slice.id}.` }
     : { role, purpose: 'prep', initial: true, text: `Settle the consequential design for slice ${slice.id} before implementation.` };
@@ -41,7 +42,7 @@ export function prepMessage(role, slice) {
 export function implementMessage(slice) {
   return slice.id === 'FINAL'
     ? { role: 'implementer', purpose: 'final', initial: true, text: FINAL_SLICE.body + ' Report in "checks" exactly what ran and its result.' }
-    : { role: 'implementer', purpose: 'implement', initial: true, text: `Implement slice ${slice.id} until its acceptance is met and focused checks pass.` };
+    : { role: 'implementer', purpose: 'implement', initial: true, text: `Implement slice ${slice.id} until its acceptance is met and focused checks pass.${implementerNote()}` };
 }
 
 export function reviewMessage() {
@@ -53,13 +54,14 @@ export function reviewMessage() {
       text: `Review the implementation of this slice: ${candidate} (exclude the pre-existing changes listed above). `
         + 'Set verdict "accept" when the slice acceptance is met with no blocking finding. '
         + 'A finding is blocking only if it violates the slice acceptance, the handoff or a project contract, or has a concrete material consequence. '
-        + 'Everything else is non-blocking: record it, but do not list it in "blocking".',
+        + 'Everything else is non-blocking: record it, but do not list it in "blocking".' + reviewerNote(),
     };
   }
   return {
     role: 'reviewer', purpose: `rereview${c.cycle}`,
     text: `The ${c.senior ? 'senior implementer' : 'implementer'} addressed findings ${c.findings.join(', ') || '(see review)'}; the candidate is now ${candidate}. `
-      + 'Re-review those repairs and their adjacent regression risk only; do not restart a full audit. Update your review and verdict.',
+      + 'Re-review those repairs and their adjacent regression risk only; do not restart a full audit. Update your review and verdict.'
+      + reviewerNote(),
   };
 }
 
@@ -96,7 +98,7 @@ export function escalate(reason, step) {
     text: `You are the senior implementer taking over this slice: ${reason}. The previous implementer's work is in the `
       + `repository (commits since the slice base and any uncommitted changes) and in ${artifactPath('implementer', slice.id)}; `
       + 'its session is not available to you. Before patching again, check whether the approach itself is wrong; you may rework '
-      + `this slice's changes within its scope. Then complete this step:\n\n${step.text}`,
+      + `this slice's changes within its scope. Then complete this step:\n\n${step.text}${implementerNote()}`,
   });
 }
 
@@ -112,55 +114,6 @@ export function stopOnRunaway(p, r, slice) {
     + `(limit ${cfg.maxCompactionsPerStep ?? 3}). The slice is probably too big, or the worker is going in circles. Its partial work `
     + `is in the working tree and its session is kept. Re-running pi-relay ${ctx.topic} retries this step in a fresh session; `
     + 'consider splitting the slice in plan.md first.');
-}
-
-// ---------- change detection ----------
-// Whether a slice changed anything is decided by content, not by `git status`: with commit: false a
-// file that is already modified stays " M file" however often it changes. The fingerprint covers HEAD,
-// the working-tree content of every file that differs from HEAD (staged or not) and of untracked files,
-// and leaves out .agents_work/ (relay and worker records are not product changes). Git lists only the
-// paths; the relay hashes the files itself in chunks, so a large change never passes through a buffer.
-// If Git cannot list the paths, the fingerprint is unique: the slice counts as changed (the cautious side).
-
-const OUTSIDE_RECORDS = ['--', '.', ':(exclude).agents_work'];
-
-function hashPath(h, rel) {
-  const file = path.join(ctx.project, rel);
-  h.update(`\0${rel}\0`);
-  let st;
-  try { st = fs.lstatSync(file); } catch { return h.update('missing'); }
-  if (st.isSymbolicLink()) return h.update(`link ${fs.readlinkSync(file)}`);
-  if (!st.isFile()) return h.update('not a file');
-  h.update(st.mode & 0o111 ? 'exec\0' : 'file\0');
-  const fd = fs.openSync(file, 'r');
-  try {
-    const buf = Buffer.alloc(1 << 20);
-    for (let n; (n = fs.readSync(fd, buf, 0, buf.length, null)) > 0;) h.update(buf.subarray(0, n));
-  } finally { fs.closeSync(fd); }
-}
-
-export function workFingerprint() {
-  const head = git(['rev-parse', '--verify', '--quiet', 'HEAD']);
-  const changed = head ? git(['diff', 'HEAD', '--name-only', '--no-renames', '-z', ...OUTSIDE_RECORDS]) : git(['ls-files', '-z', ...OUTSIDE_RECORDS]);
-  const untracked = git(['ls-files', '-o', '--exclude-standard', '-z', ...OUTSIDE_RECORDS]);
-  if (changed === null || untracked === null) return `unknown ${Date.now()} ${Math.random()}`;
-  const h = createHash('sha256');
-  h.update(`head ${head}\n`);
-  const paths = [...new Set(`${changed}\0${untracked}`.split('\0').filter(Boolean))].sort();
-  for (const rel of paths) {
-    try { hashPath(h, rel); } catch { h.update('unreadable'); }
-  }
-  return h.digest('hex');
-}
-
-// The point a slice's changes are measured from: when it starts, and when it resumes after being set aside.
-export const sliceBaseline = () => ({ base: git(['rev-parse', 'HEAD']), baseContent: workFingerprint() });
-
-export function sliceChanged() {
-  const c = state.cur;
-  if (git(['rev-parse', 'HEAD']) !== c.base) return true;
-  if (c.baseContent !== undefined) return workFingerprint() !== c.baseContent;
-  return (git(['status', '--porcelain']) ?? '') !== (c.baseStatus ?? ''); // a slice started by an older relay
 }
 
 // Applies a worker's result. If the transition fails before it has recorded a successor (a next step
@@ -239,9 +192,10 @@ function applyResult(c, p, r) {
   }
 
   if (p.purpose === 'prep') {
-    closeAgent(p.role);
+    if (p.role === 'acceptance' && r.status === 'done') recordAcceptance(slice.id, r);
     c.prep.shift();
-    return queue(c.prep.length ? prepMessage(c.prep[0], slice) : implementMessage(slice));
+    queue(c.prep.length ? prepMessage(c.prep[0], slice) : implementMessage(slice));
+    return closeAgent(p.role);
   }
 
   if (p.role === 'implementer' || p.role === 'senior') {

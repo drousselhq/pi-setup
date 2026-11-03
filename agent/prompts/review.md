@@ -49,6 +49,11 @@ to the candidate, say that this is self-review rather than an independent review
   deleted, skipped or loosened to make the change pass (justified updates for approved changes are
   fine). To compare with the base, read it (`git show <base>:<path>`); never switch, stash or reset
   the working tree.
+- When acceptance tests were written before implementation, read their record first and run them on
+  the candidate. Compare each changed acceptance file with its original: a binding change (names,
+  signatures, fixture paths) is fine; each changed expected result is a finding, blocking unless the
+  requirement source supports the change. Read the record's baseline clause by clause: a test that
+  already passed before implementation may not exercise the change.
 - Trace each acceptance clause to evidence. A clause covered only in part (some cases, some platforms,
   one mode) is not met.
 - Note maintenance debt this change introduces only when it has a concrete consequence

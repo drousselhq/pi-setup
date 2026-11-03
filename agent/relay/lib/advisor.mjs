@@ -2,6 +2,7 @@
 
 import fs from 'node:fs';
 import { agentAlive, closeAgent, ensureAgent } from './agents.mjs';
+import { sliceChanged } from './changes.mjs';
 import { C, callout, emit, event, log, roleTag } from './console.mjs';
 import { advisorOwnerReasons, classTable, councilAttribution, councilBriefProblem, councilEnabled, ownerNotes, runCouncil } from './council.mjs';
 import { run } from './io.mjs';
@@ -12,7 +13,7 @@ import {
   artifactPath, DEFERRAL_FIELDS, prompt, readResult, resultPathFor, settle, showQuestion, valid, validDeferral, waitForOperator, writeAssignment,
 } from './steps.mjs';
 import { save } from './store.mjs';
-import { currentSlice, sliceChanged } from './transitions.mjs';
+import { currentSlice } from './transitions.mjs';
 
 export const advisorEnabled = () => cfg.advisor?.enabled !== false && Boolean(cfg.roles?.advisor?.model);
 

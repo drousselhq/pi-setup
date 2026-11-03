@@ -42,7 +42,7 @@ export function parsePlan() {
     } else if (cur) {
       cur.lines.push(line);
       const n = line.match(/^\W*needs\W*:\s*(.+)$/i);
-      if (n) cur.needs = n[1].toLowerCase().split(/[,\s]+/).filter((x) => x === 'scout' || x === 'architecture');
+      if (n) cur.needs = n[1].toLowerCase().split(/[,\s]+/).filter((x) => ['scout', 'architecture', 'acceptance'].includes(x));
       // Acceptance criteria: the bullets under "Acceptance:" (or one inline criterion after the colon).
       const a = line.match(/^\W*acceptance\W*:\s*(.*)$/i);
       if (a) { cur.inAcceptance = true; if (a[1].trim()) cur.acceptance++; }
