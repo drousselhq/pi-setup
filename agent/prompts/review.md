@@ -47,8 +47,10 @@ to the candidate, say that this is self-review rather than an independent review
   example required tests, coverage or file size) against what was added.
 - Check that important new tests would fail if the behaviour regressed, and that no test was
   deleted, skipped or loosened to make the change pass (justified updates for approved changes are
-  fine). To compare with the base, read it (`git show <base>:<path>`); never switch, stash or reset
-  the working tree.
+  fine). A change to a verification gate, threshold, coverage floor or its exclusions that the
+  request, handoff, slice or a recorded decision does not authorise is blocking, whatever the
+  reason given for it. To compare with the base, read it (`git show <base>:<path>`); never
+  switch, stash or reset the working tree.
 - When acceptance tests were written before implementation, read their record first and run them on
   the candidate. Compare each changed acceptance file with its original: a binding change (names,
   signatures, fixture paths) is fine; each changed expected result is a finding, blocking unless the

@@ -81,7 +81,9 @@ export const FINAL_SLICE = {
   title: 'Final verification',
   needs: [],
   body: 'Run the project\'s required full verification on the current candidate (all slices). '
-    + 'Fix failures that belong to this work, within its accepted scope. Do not start new features.',
+    + 'Fix failures that belong to this work, within its accepted scope. Do not start new features. '
+    + 'A change to a verification gate, threshold, coverage floor or its exclusions that the handoff, a slice or a decision '
+    + 'does not authorise needs a decision (status needs-decision), whatever the reason for it.',
 };
 
 // ---------- agents ----------

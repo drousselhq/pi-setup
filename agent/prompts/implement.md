@@ -30,6 +30,9 @@ stopping. Follow the project's own instructions (AGENTS.md, CONTRIBUTING.md) for
   source; changing what acceptance requires needs the authority it always needs. Record, per
   acceptance test, its first result once bound: passed; failed and revealed a defect you then fixed;
   judged wrong; or environment unavailable.
+- A change to a verification gate, threshold, coverage floor or its exclusions that the request,
+  handoff, slice or a recorded decision does not authorise needs approval (`needs-decision` in relay
+  mode), whatever the reason for it.
 - Before reporting done, check user-facing behavior through the path the user actually uses (real
   app and native input, real command, real file). Tests and stand-ins (DOM events, WebDriver, mocks)
   do not replace that check; if the real path is unavailable, record it as unverified.

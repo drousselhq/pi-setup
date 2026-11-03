@@ -18,6 +18,7 @@ test('a plan runs slice by slice: implement, review, then the final verification
   assert.equal(s.slices.S2.base, s.slices.S1.head);
   assert.match(p.log(), /relay complete/);
   assert.match(h.prompts[1].assignment(), /commits [0-9a-f]{40}\.\.HEAD/);
+  assert.match(h.prompts[4].assignment(), /A change to a verification gate, threshold, coverage floor or its exclusions that the handoff, a slice or a decision does not authorise needs a decision/);
   assert.ok([...h.agents.values()].every((a) => !a.alive), 'every tab is closed at the end');
 });
 
