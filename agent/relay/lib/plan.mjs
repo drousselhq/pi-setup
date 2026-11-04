@@ -82,8 +82,12 @@ export const FINAL_SLICE = {
   needs: [],
   body: 'Run the project\'s required full verification on the current candidate (all slices). '
     + 'Fix failures that belong to this work, within its accepted scope. Do not start new features. '
-    + 'A change to a verification gate, threshold, coverage floor or its exclusions that the handoff, a slice or a decision '
-    + 'does not authorise needs a decision (status needs-decision), whatever the reason for it.',
+    + 'Weakening a verification gate (anything that makes it check less than before: a looser threshold, limit, tolerance '
+    + 'or coverage floor; code, tests or cases excluded, removed or moved out of its reach or to a weaker level; a check '
+    + 'skipped, made optional or replaced with a weaker one) that the handoff, a slice or a decision does not authorise needs '
+    + 'a decision (status needs-decision), whatever the reason for it. Unless the project\'s rules say otherwise, genuinely '
+    + 'new code under the existing requirements, the same requirements kept across a path change, or a tightened gate is '
+    + 'not weakening; judge each affected requirement separately.',
 };
 
 // ---------- agents ----------

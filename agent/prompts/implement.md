@@ -30,9 +30,14 @@ stopping. Follow the project's own instructions (AGENTS.md, CONTRIBUTING.md) for
   source; changing what acceptance requires needs the authority it always needs. Record, per
   acceptance test, its first result once bound: passed; failed and revealed a defect you then fixed;
   judged wrong; or environment unavailable.
-- A change to a verification gate, threshold, coverage floor or its exclusions that the request,
-  handoff, slice or a recorded decision does not authorise needs approval (`needs-decision` in relay
-  mode), whatever the reason for it.
+- Weakening a verification gate, meaning anything that makes it check less than before (loosening
+  a threshold, limit, tolerance or coverage floor; excluding, removing or moving code, tests or cases
+  out of its reach or to a weaker level; skipping a check, making it optional or replacing it with a
+  weaker one), needs approval (`needs-decision` in relay mode) unless the request, handoff, slice or
+  a recorded decision authorises it, whatever the reason for it. Putting genuinely new code or tests
+  under the existing requirements, keeping them across a path change, or tightening a gate needs no
+  approval unless the project's rules say otherwise. Judge each affected requirement separately: an
+  addition or a tightening never offsets a weakening.
 - Before reporting done, check user-facing behavior through the path the user actually uses (real
   app and native input, real command, real file). Tests and stand-ins (DOM events, WebDriver, mocks)
   do not replace that check; if the real path is unavailable, record it as unverified.
