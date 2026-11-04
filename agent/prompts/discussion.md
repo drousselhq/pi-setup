@@ -147,7 +147,8 @@ handoff,
 follow the handoff prompt (load `~/.pi/agent/prompts/handoff.md` if it has not been
 expanded here) and the agent-work skill. This authorizes only the requested handoff
 artifact, the topic directory it needs, `plan.md` when I gave a slice breakdown, and
-`relay.json` when I asked for non-default relay settings.
+`relay.json` when I asked for non-default relay settings or the project's instructions require
+relay settings for its topics.
 If I ask for a summary in chat only, write no file. Preserve agreed intent,
 uncertainty and explicit authority limits. Finish with the handoff path and the
 `pi-relay <topic>` command, then stop: readiness is not authorization to start.

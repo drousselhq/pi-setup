@@ -23,10 +23,13 @@ Capture only what the work needs:
   current branch and unfinished edits if known.
 - **Authority:** whether workers may commit locally (default yes, never push), and any limits on
   models, spending, dependencies, external systems or data.
+- **What the project's instructions require of a handoff,** if they say (for example a decision-routing
+  section).
 
 If I gave a slice breakdown, also write `plan.md` in the relay format (see `/plan`); otherwise the
 relay's planner writes it. If I asked for non-default relay settings (no commits, another model,
-cycle limits), write them to `.agents_work/<topic>/relay.json` (see `~/.pi/agent/relay/README.md`).
+cycle limits), or the project's instructions require relay settings for its topics, write them to
+`.agents_work/<topic>/relay.json` (see `~/.pi/agent/relay/README.md`), keeping any settings already there.
 Keep the handoff short and concrete; do not copy the transcript.
 
 Do not update tracker tickets unless I explicitly ask for that specific update.
