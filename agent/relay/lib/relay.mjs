@@ -5,6 +5,7 @@ import path from 'node:path';
 import { sliceBaseline } from './changes.mjs';
 import { C, callout, compactionText, emit, heading, log, out, purposeLabel, resetConsole, ROLE_COLOR, roleTag, setTTY, shortModel } from './console.mjs';
 import { checkCouncilConfig } from './council.mjs';
+import { replaceWorker } from './fresh.mjs';
 import { realIo } from './io.mjs';
 import { FINAL_SLICE, nextSlice, parsePlan, PLAN_SLICE, planSummary, progress, progressText, sliceProgress } from './plan.mjs';
 import { resumeSetAside, setAsideForEarlierSlice } from './prerequisites.mjs';
@@ -93,14 +94,35 @@ export function banner() {
   out(C.gray('\u2570\u2500'));
 }
 
+// Options: --status, --fresh <role> and --note <text> (only with --fresh). Anything else is refused.
+export function parseArgs(args) {
+  const o = { topic: null, status: false, help: false, fresh: null, note: null };
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    if (a === '-h' || a === '--help') o.help = true;
+    else if (a === '--status') o.status = true;
+    else if (a === '--fresh' || a === '--note') {
+      const v = args[++i];
+      if (v === undefined || v.startsWith('-')) throw new RelayStop(`${a} needs a value.`);
+      o[a.slice(2)] = v;
+    } else if (a.startsWith('-')) throw new RelayStop(`Unknown option ${a}.`);
+    else if (o.topic) throw new RelayStop(`Unexpected argument "${a}" (the topic is "${o.topic}").`);
+    else o.topic = a;
+  }
+  if (o.note !== null && !o.fresh) throw new RelayStop('--note is only used with --fresh <role>.');
+  return o;
+}
+
 export function main(args) {
-  const topic = args.find((a) => !a.startsWith('-'));
-  if (!topic || args.includes('-h') || args.includes('--help')) {
-    io.write('Usage: pi-relay <topic> [--status]\nRun from the project checkout, inside a Herdr pane. See README.md.\n');
+  const opts = parseArgs(args);
+  const topic = opts.topic;
+  if (!topic || opts.help) {
+    io.write('Usage: pi-relay <topic> [--status] [--fresh <role> [--note <text>]]\n'
+      + 'Run from the project checkout, inside a Herdr pane. See README.md.\n');
     return 0;
   }
   setup(topic);
-  if (args.includes('--status')) { printStatus(); return 0; }
+  if (opts.status) { printStatus(); return 0; }
   if (io.env.HERDR_ENV !== '1') throw new RelayStop('Run pi-relay inside a Herdr pane (HERDR_ENV=1).');
   checkCouncilConfig();
   ctx.workspace = herdr(['pane', 'current', '--current']).pane.workspace_id;
@@ -113,6 +135,7 @@ export function main(args) {
   });
   log(`relay started in ${ctx.project} (topic ${topic})`, { quiet: true });
   banner();
+  if (opts.fresh) replaceWorker(opts.fresh, opts.note);
   setAsideForEarlierSlice();
   for (let slice = state.cur ? currentSlice() : nextSlice(); slice; slice = nextSlice()) runSlice(slice);
   emit('run_complete', { head: git(['rev-parse', 'HEAD']) });

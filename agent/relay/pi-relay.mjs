@@ -6,7 +6,7 @@
 //   steps.mjs          one worker step: assignment,       advisor.mjs        decisions via the advisor
 //                      prompt, result file, waiting       council.mjs        the advisory council's votes
 //   prerequisites.mjs  inserted slices, set aside, resume  acceptance.mjs     acceptance tests written before code
-//   changes.mjs        whether a slice changed anything
+//   changes.mjs        whether a slice changed anything   fresh.mjs          --fresh: replace the waiting worker
 //   agents.mjs         worker tabs and sessions           plan.mjs           plan.md and progress
 //   store.mjs          paths, config, state, lock         quota.mjs          Anthropic quota pacing
 //   usage.mjs          session token usage                console.mjs        console, log.md, events.jsonl

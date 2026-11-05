@@ -394,6 +394,7 @@ export function showQuestion(agent, r) {
   callout(color, `${agent.role} ${r.status === 'blocked' ? 'is blocked' : 'needs a decision'} \u2014 waiting for you`, [
     r.question ?? r.summary ?? '',
     C.dim(`Answer in tab "${agent.label}". The relay resumes when the ${agent.role} rewrites its result file.`),
+    C.dim(`If only a new session can continue, stop the relay (Ctrl-C) and run: pi-relay ${ctx.topic} --fresh ${agent.role}`),
   ]);
 }
 

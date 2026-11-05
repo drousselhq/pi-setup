@@ -18,6 +18,7 @@ the slice is done. Session files are kept, and their paths are listed in `relay/
 cd <project checkout>        # inside a Herdr pane
 pi-relay <topic>             # runs or resumes .agents_work/<topic>
 pi-relay <topic> --status    # shows progress without running anything
+pi-relay <topic> --fresh <role> [--note "..."]   # replaces the waiting worker with a fresh session (below)
 ```
 
 Input: `.agents_work/<topic>/handoff.md` (from `/handoff`), plus `plan.md` if you wrote one.
@@ -98,6 +99,13 @@ Running workers keep working while the script is stopped.
   your overrule are there to catch.
 - **`blocked`:** you get a notification with the problem. Answer or fix it, then reply to the worker in its
   tab. It continues and rewrites its result file, and the relay picks that up.
+- **A worker only a new session can fix** (it saw material it must not see, or it is confused beyond repair):
+  stop the relay (Ctrl-C) and run `pi-relay <topic> --fresh <role>`, optionally with `--note "..."` for
+  anything the new session must know that is not in the topic's files (for example a permission you gave in the
+  old tab). The relay closes that worker's tab, forgets its session and restarts its current step in a new session,
+  with your note. A fresh reviewer does a full, independent review: the previous review record is set aside in
+  `relay/NNN-reviewer-replaced-review.md`, kept for you, and not given to it. Other roles keep their record. It
+  applies only to the worker the relay is waiting for.
 - **Stops (exit code 2):** a repair-cycle limit, the scout/architect request limit, or a missing
   plan. Read the message in `relay/log.md`, adjust `plan.md`/`handoff.md` if needed, then run `pi-relay <topic>` again.
   Re-running after a limit stop allows that many more cycles or requests.
@@ -143,6 +151,7 @@ One JSON object per line. Every event has `t`, `run` (one ID per relay process),
 | `owner_decision`, `council_decision` | id, title, decision, workerRole, replies, slice |
 | `council_start`, `council_vote`, `council_escalation` | options, members / member, model, choice, classes, confidence, reversibility, ownerNeeded or failed / reasons |
 | `nudge`, `redeliver` | role, purpose, reason |
+| `fresh_session` | role, purpose, setAside, note (`--fresh`) |
 | `acceptance_recorded`, `acceptance_compared` | tests, snapshot / changed, missing (acceptance files, before each review) |
 | `quota_reading`, `quota_pause`, `quota_pause_end` | fiveHour, sevenDay / until, reason / waitedMs |
 | `run_complete` / `run_stop` | head / reason, kind |
