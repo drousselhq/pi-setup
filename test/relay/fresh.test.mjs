@@ -90,3 +90,72 @@ test('the blocked notice tells the owner about --fresh', () => {
   assert.equal(h.run(), 1);
   assert.match(h.output.replace(/[┃\s]+/g, ' '), new RegExp(`pi-relay ${TOPIC} --fresh reviewer`));
 });
+
+// ---------- after a compaction-limit stop ----------
+
+const runaway = (c, partial) => {
+  if (partial) fs.writeFileSync(c.p.file(partial), 'partial notes\n');
+  fs.appendFileSync(c.session, '{"type":"compaction"}\n{"type":"compaction"}\n'); // over the limit, no result
+};
+const flat = (h) => h.output.replace(/[┃\s]+/g, ' ');
+
+test('after a reviewer\'s compaction-limit stop, --fresh replaces the queued retry: note, full review, record set aside', () => {
+  const p = makeProject({ plan: ONE });
+  const h = new FakeHerdr(p, (c) => (c.role === 'reviewer' && c.n === 1 ? runaway(c, 'slices/S1/review.md') : standard(c)));
+  assert.equal(h.run(), 2);
+  const stop = flat(h);
+  assert.match(stop, new RegExp(`use pi-relay ${TOPIC} --fresh reviewer --note "..." \\(the partial review record is then set aside`));
+  assert.match(stop, /S1 already has commits or changes, so no slice can be inserted before it/);
+  assert.doesNotMatch(stop, /split it in plan\.md/);
+  assert.equal(p.state().cur.pending, null);
+  assert.equal(p.state().cur.queued.retryOf, 'runaway');
+  h.output = '';
+  assert.equal(h.run([TOPIC, '--fresh', 'implementer']), 2, 'the queued retry is the reviewer\'s');
+  assert.match(flat(h), /the implementer has no step in progress \(the waiting step is the reviewer's\)/);
+  assert.equal(h.run([TOPIC, '--fresh', 'reviewer', '--note', 'Do not transcribe.']), 0);
+  const reviewers = h.starts.filter((s) => s.role === 'reviewer');
+  assert.equal(reviewers.length, 2);
+  assert.equal(reviewers[1].resumed, false);
+  const fresh = h.prompts.filter((c) => c.role === 'reviewer')[1];
+  assert.match(fresh.assignment(), /The owner replaced the previous reviewer session for this step: do a full, independent review/);
+  assert.match(fresh.assignment(), /The owner's note: Do not transcribe\./);
+  const aside = fs.readdirSync(p.relayDir).find((f) => f.endsWith('-reviewer-replaced-review.md'));
+  assert.equal(fs.readFileSync(`${p.relayDir}/${aside}`, 'utf8'), 'partial notes\n');
+  assert.ok(p.events().some((e) => e.type === 'fresh_session' && e.note === 'Do not transcribe.'));
+});
+
+test('after a reviewer\'s compaction-limit stop, a plain re-run retries in a new session that keeps the partial record', () => {
+  const p = makeProject({ plan: ONE });
+  let seen = null;
+  const h = new FakeHerdr(p, (c) => {
+    if (c.role === 'reviewer' && c.n === 1) return runaway(c, 'slices/S1/review.md');
+    if (c.role === 'reviewer' && c.n === 2) seen = p.read('slices/S1/review.md');
+    return standard(c);
+  });
+  assert.equal(h.run(), 2);
+  assert.equal(h.run(), 0);
+  assert.equal(seen, 'partial notes\n');
+  const reviewers = h.starts.filter((s) => s.role === 'reviewer');
+  assert.equal(reviewers.length, 2);
+  assert.notEqual(reviewers[1].session, reviewers[0].session);
+  assert.doesNotMatch(h.prompts.filter((c) => c.role === 'reviewer')[1].assignment(), /The owner replaced/);
+});
+
+test('a compaction-limit stop before any change suggests splitting the slice', () => {
+  const p = makeProject({ plan: ONE, config: { escalation: { enabled: false } } });
+  const h = new FakeHerdr(p, (c) => (c.role === 'implementer' && c.n === 1 ? runaway(c) : standard(c)));
+  assert.equal(h.run(), 2);
+  const stop = flat(h);
+  assert.match(stop, /split it in plan\.md first \(S1 has no commits or changes yet\)/);
+  assert.match(stop, new RegExp(`--fresh implementer --note "\\.\\.\\."\\. `));
+  assert.doesNotMatch(stop, /partial review record/);
+});
+
+test('a planner\'s compaction-limit stop gives no slice advice, since there is no slice yet', () => {
+  const p = makeProject({ plan: null });
+  const h = new FakeHerdr(p, (c) => (c.role === 'planner' ? runaway(c) : standard(c)));
+  assert.equal(h.run(), 2);
+  const stop = flat(h);
+  assert.match(stop, new RegExp(`--fresh planner --note "\\.\\.\\."\\. `));
+  assert.doesNotMatch(stop, /split it|already has commits/);
+});

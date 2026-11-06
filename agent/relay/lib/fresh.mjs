@@ -5,7 +5,8 @@
 // that worker's tab, forgets its session and restarts its current step in a new session, with the
 // owner's optional --note. A fresh reviewer does a full, independent review: the previous review record
 // is set aside in relay/ (kept for the owner, not given to the new reviewer). Other roles keep their
-// record, as a senior implementer does when it takes over.
+// record, as a senior implementer does when it takes over. After a compaction-limit stop, the queued retry
+// of that step is replaced the same way.
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -21,10 +22,10 @@ const REPLACEABLE = ['planner', 'scout', 'architect', 'acceptance', 'implementer
 export function replaceWorker(role, note) {
   const c = state.cur;
   if (!REPLACEABLE.includes(role)) throw new RelayStop(`--fresh takes a worker role (${REPLACEABLE.join(', ')}), not "${role}".`);
-  const p = c?.pending;
+  const p = c?.pending ?? (c?.queued?.retryOf === 'runaway' ? c.queued : null);
   if (!p || p.role !== role) {
     throw new RelayStop(`--fresh ${role}: the ${role} has no step in progress${p ? ` (the waiting step is the ${p.role}'s)` : ''}. `
-      + 'It applies to the worker the relay is waiting for.');
+      + 'It applies to the worker the relay is waiting for, or to the step retried after a compaction-limit stop.');
   }
   closeAgent(role); // closes the tab and forgets the session, so the next start is a new one
   let setAside = null;
@@ -42,7 +43,7 @@ export function replaceWorker(role, note) {
     : `The owner replaced the previous ${role} session for this step; its record is ${artifactPath(role, c.slice)}. `
       + 'Check the repository state before continuing.';
   c.pending = null;
-  queue({ role, purpose, initial: true, text: `${why}${note ? `\n\nThe owner's note: ${note}` : ''}\n\n${text}` });
+  queue({ role, purpose, initial: true, retryOf: p.retryOf, text: `${why}${note ? `\n\nThe owner's note: ${note}` : ''}\n\n${text}` });
   save();
   emit('fresh_session', { role, purpose, setAside, note: note ?? null });
   log(`${c.slice} ${role} replaced by a fresh session at the owner's request${setAside ? `; previous review record set aside in ${setAside}` : ''}`, { quiet: true });

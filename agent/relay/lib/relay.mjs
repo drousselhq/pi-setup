@@ -73,7 +73,7 @@ export function printStatus() {
     out('');
     out(`  ${C.gray('current step')}  ${step ? `${roleTag(step.role)} ${purposeLabel(step.purpose)}${state.cur.pending ? C.gray(' (sent)') : C.gray(' (queued)')}` : 'none'}`);
     if (state.cur.cycle) out(`  ${C.gray('repair cycles')} ${state.cur.cycle}`);
-    for (const a of Object.values(state.cur.agents)) out(`  ${C.gray('open tab')}      "${a.label}"`);
+    for (const a of Object.values(state.cur.agents).filter((x) => x.tab)) out(`  ${C.gray('open tab')}      "${a.label}"`);
   }
   out('');
 }
@@ -163,15 +163,22 @@ export function runRelay(args, ioImpl = realIo) {
   try {
     return main(args);
   } catch (e) {
-    const msg = e instanceof RelayStop ? e.message : `Unexpected error: ${e.stack ?? e}`;
+    let msg = e instanceof RelayStop ? e.message
+      : diskFull(e) ? `Unexpected error: the disk is full (${e.message}). Free some space, then start pi-relay ${ctx.topic ?? '<topic>'} again.`
+        : `Unexpected error: ${e.stack ?? e}`;
     // A relay that did not get the lock must not touch the topic's records: another relay may own them.
+    // Recording the stop can fail too (a full disk): the original cause is still reported.
     if (ctx.locked) {
-      save();
+      const unrecorded = [];
+      try { save(); } catch (err) { unrecorded.push(`state.json (${err.message})`); }
       emit('run_stop', { reason: msg.slice(0, 2000), kind: e instanceof RelayStop ? 'stop' : 'error' });
-      log(`STOPPED: ${msg}`, { quiet: true });
+      try { log(`STOPPED: ${msg}`, { quiet: true }); } catch (err) { unrecorded.push(`log.md (${err.message})`); }
+      if (unrecorded.length) msg += `\nThis stop could not be recorded in ${unrecorded.join(' or ')}.`;
     }
     callout(C.red, 'Relay stopped', [msg, ctx.topic && e instanceof RelayStop ? C.dim(`Resume with: pi-relay ${ctx.topic}`) : null]);
-    if (ctx.topic) notify(`Relay ${ctx.topic} stopped`, msg.slice(0, 200));
+    try { if (ctx.topic) notify(`Relay ${ctx.topic} stopped`, msg.slice(0, 200)); } catch { /* the message is already shown */ }
     return e instanceof RelayStop ? 2 : 1;
   }
 }
+
+const diskFull = (e) => e?.code === 'ENOSPC' || /ENOSPC|no space left on device/i.test(String(e?.message ?? ''));

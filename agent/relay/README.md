@@ -37,7 +37,9 @@ timer while a worker is busy, and highlighted boxes when it needs you. `relay/lo
 same events as plain text. Set `NO_COLOR=1` for plain console output.
 
 Stopping the script (Ctrl-C) is safe. Re-running it resumes from `relay/state.json`.
-Running workers keep working while the script is stopped.
+Running workers keep working while the script is stopped. The one exception is a worker the script was
+starting at that moment: the next run closes its tab and starts it again. If a stop cannot be recorded (a
+full disk, for instance), the script still shows its cause in the terminal.
 
 ## When it needs you
 
@@ -98,14 +100,15 @@ Running workers keep working while the script is stopped.
   the worker's own preference; and both can misclassify a question the same way, which the records and
   your overrule are there to catch.
 - **`blocked`:** you get a notification with the problem. Answer or fix it, then reply to the worker in its
-  tab. It continues and rewrites its result file, and the relay picks that up.
+  tab. It continues and rewrites its result file, and the relay picks that up. If it then asks for a decision,
+  that question goes through the advisor (and council) like any other.
 - **A worker only a new session can fix** (it saw material it must not see, or it is confused beyond repair):
   stop the relay (Ctrl-C) and run `pi-relay <topic> --fresh <role>`, optionally with `--note "..."` for
   anything the new session must know that is not in the topic's files (for example a permission you gave in the
   old tab). The relay closes that worker's tab, forgets its session and restarts its current step in a new session,
   with your note. A fresh reviewer does a full, independent review: the previous review record is set aside in
   `relay/NNN-reviewer-replaced-review.md`, kept for you, and not given to it. Other roles keep their record. It
-  applies only to the worker the relay is waiting for.
+  applies only to the worker the relay is waiting for, or to the step retried after a compaction-limit stop.
 - **Stops (exit code 2):** a repair-cycle limit, the scout/architect request limit, or a missing
   plan. Read the message in `relay/log.md`, adjust `plan.md`/`handoff.md` if needed, then run `pi-relay <topic>` again.
   Re-running after a limit stop allows that many more cycles or requests.
@@ -144,6 +147,7 @@ One JSON object per line. Every event has `t`, `run` (one ID per relay process),
 | `run_start` | project, resumed, head, roles (models/thinking), commit, maxRepairCycles, quota, council (when enabled) |
 | `slice_start` / `slice_done` | title, needs, base / head, commits, repairCycles, helpRequests, durationMs |
 | `agent_start` | role, agent, model, thinking, session (Pi session file), tab, resumedSession |
+| `agent_start_recovered` | role, agent, tab (a worker whose start was interrupted, closed before starting anew) |
 | `step_sent` / `step_result` | role, purpose / status, verdict, blocking, summary, question, checks, durationMs, usage |
 | `operator_wait_start` / `operator_wait_end` | role, status, question / waitedMs |
 | `permission_wait` | role, waitedMs |
@@ -235,7 +239,9 @@ For roles, only the fields you set are overridden:
   when a subscription ends).
 - **Compaction limit** (`maxCompactionsPerStep`, default 2): a worker that compacts that often within one step
   is interrupted (Escape). An implementer's step is handed to the senior; for the senior or any other role the
-  relay stops, and re-running retries the step in a fresh session. `0` disables it.
+  relay stops, and re-running retries the step in a fresh session that continues from the partial work (a
+  reviewer's partial record included). To steer that retry, or to have a reviewer start over, re-run with
+  `--fresh <role> --note "..."` instead. `0` disables it.
 - `commit: true`: the implementer commits each slice and each repair locally (explicit paths, never pushes).
   The reviewer reviews `base..HEAD`. With `false`, everything stays uncommitted and the reviewer reads the working tree.
 - The script never pushes, never touches trackers and never edits product files.

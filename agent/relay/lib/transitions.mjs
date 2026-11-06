@@ -88,18 +88,20 @@ export function escalate(reason, step) {
   c.senior = true;
   c.juniorRepairs = c.cycle - (String(step.purpose).startsWith('repair') ? 1 : 0);
   c.escalation = reason;
-  closeAgent('implementer');
-  const rc = cfg.roles?.senior ?? {};
-  emit('escalation', { from: 'implementer', to: 'senior', reason, reviewLoops: c.cycle, model: rc.model ?? null, thinking: rc.thinking ?? null });
-  log(`${slice.id} escalated to senior implementer: ${reason}`, { quiet: true });
-  event(C.yellow('\u21e7'), `${C.yellow(C.bold('escalated to senior implementer'))} ${C.gray(`\u00b7 ${shortModel(rc.model)} ${rc.thinking ?? 'medium'}`)}`, reason);
-  queue({
+  // The successor and the closed worker are saved together: an interruption in between must not lose the step.
+  c.queued = {
     role: 'senior', purpose: step.purpose, initial: true,
     text: `You are the senior implementer taking over this slice: ${reason}. The previous implementer's work is in the `
       + `repository (commits since the slice base and any uncommitted changes) and in ${artifactPath('implementer', slice.id)}; `
       + 'its session is not available to you. Before patching again, check whether the approach itself is wrong; you may rework '
       + `this slice's changes within its scope. Then complete this step:\n\n${step.text}${implementerNote()}`,
-  });
+  };
+  closeAgent('implementer');
+  save();
+  const rc = cfg.roles?.senior ?? {};
+  emit('escalation', { from: 'implementer', to: 'senior', reason, reviewLoops: c.cycle, model: rc.model ?? null, thinking: rc.thinking ?? null });
+  log(`${slice.id} escalated to senior implementer: ${reason}`, { quiet: true });
+  event(C.yellow('\u21e7'), `${C.yellow(C.bold('escalated to senior implementer'))} ${C.gray(`\u00b7 ${shortModel(rc.model)} ${rc.thinking ?? 'medium'}`)}`, reason);
 }
 
 export function stopOnRunaway(p, r, slice) {
@@ -107,13 +109,23 @@ export function stopOnRunaway(p, r, slice) {
   if (p.role === 'implementer' && escalationCfg()) {
     return escalate(`the implementer was stopped after ${plural(p.runaway.compactions, 'compaction')} in one step`, { purpose: p.purpose, text: p.text });
   }
+  // A re-run retries in a fresh session; --fresh can replace this retry (retryOf). Saved together with the
+  // closed worker, so an interruption in between cannot lose the step.
+  c.queued = { role: p.role, purpose: p.purpose, initial: true, text: p.text, retryOf: 'runaway' };
   closeAgent(p.role);
-  queue({ role: p.role, purpose: p.purpose, initial: true, text: p.text }); // re-run retries in a fresh session
   save();
+  const fresh = `pi-relay ${ctx.topic} --fresh ${p.role} --note "..."`;
+  const planning = ['PLAN', 'FINAL'].includes(slice.id) ? '' // not a slice of plan.md
+    : sliceChanged()
+      ? ` ${slice.id} already has commits or changes, so no slice can be inserted before it: work that does not belong in this `
+        + 'step can move to a new slice after it in plan.md, but this slice must still meet its acceptance conditions.'
+      : ` If the slice is too big, split it in plan.md first (${slice.id} has no commits or changes yet).`;
   throw new RelayStop(`${slice.id}: the ${p.role} was interrupted after ${p.runaway.compactions} compactions in one step `
-    + `(limit ${cfg.maxCompactionsPerStep ?? 3}). The slice is probably too big, or the worker is going in circles. Its partial work `
-    + `is in the working tree and its session is kept. Re-running pi-relay ${ctx.topic} retries this step in a fresh session; `
-    + 'consider splitting the slice in plan.md first.');
+    + `(limit ${cfg.maxCompactionsPerStep ?? 3}). The step is probably too big, or the worker is going in circles. Its partial work `
+    + `is in the working tree and its session file is kept. Re-running pi-relay ${ctx.topic} retries this step in a fresh session `
+    + `that continues from that work. To steer the retry instead, use ${fresh}`
+    + (p.role === 'reviewer' ? ' (the partial review record is then set aside and the new reviewer reviews in full)' : '')
+    + `.${planning}`);
 }
 
 // Applies a worker's result. If the transition fails before it has recorded a successor (a next step

@@ -279,11 +279,9 @@ export function composeText(msg, resultPath, needsAssignment) {
 }
 
 export function send(msg) {
+  // A role's notes stay saved until the pending step that carries them is: starting a worker saves state.
   const notes = state.cur.notes?.[msg.role];
-  if (notes) {
-    msg = { ...msg, text: `${notes}\n\n${msg.text}` };
-    delete state.cur.notes[msg.role];
-  }
+  if (notes) msg = { ...msg, text: `${notes}\n\n${msg.text}` };
   const { agent, fresh } = ensureAgent(msg.role);
   const slice = currentSlice();
   const resultPath = resultPathFor(msg.role, msg.purpose);
@@ -297,6 +295,7 @@ export function send(msg) {
     startUsage: { session: agent.session, totals: sessionTotals(agent.session) },
   };
   emit('step_sent', { role: msg.role, purpose: msg.purpose, agent: agent.name, resultPath, newAssignment: Boolean(msg.initial || fresh) });
+  if (notes) delete state.cur.notes[msg.role];
   state.cur.queued = null;
   save();
   log(`${slice.id} → ${msg.role} (${msg.purpose})`, { quiet: true });
@@ -321,6 +320,7 @@ export function collect() {
     if (valid(p.role, done) && !HUMAN_STATUSES.has(done.status)) return done;
   }
   let nudged = false;
+  const routesDecisions = advisorEnabled() && p.role !== 'advisor';
   for (;;) {
     const { agent, fresh } = ensureAgent(p.role);
     const liveAgent = agentAlive(agent);
@@ -340,13 +340,14 @@ export function collect() {
       settle(agent, prompt(agent, composeText(p, p.resultPath, p.initial || fresh)));
       continue;
     }
-    if (r && r.status === 'needs-decision' && advisorEnabled() && p.role !== 'advisor') {
+    if (r && r.status === 'needs-decision' && routesDecisions) {
       const outcome = consultAdvisor(agent, p, r);
       if (outcome === 'set-aside') return { status: 'set-aside' }; // a prerequisite slice runs first
       if (outcome) continue; // the worker has the owner's decision; collect its next result
     }
     if (r && HUMAN_STATUSES.has(r.status)) {
-      r = waitForOperator(agent, r);
+      r = waitForOperator(agent, r, { decisions: routesDecisions });
+      if (r?.status === 'needs-decision') continue; // the worker's new question goes to the advisor
       if (p.runaway) {
         return { status: 'runaway', summary: `Interrupted after ${plural(p.runaway.compactions, 'compaction')} and ${plural(p.runaway.turns, 'turn')} in one step.` };
       }
@@ -370,8 +371,9 @@ export function collect() {
     // A worker cut off by a usage limit stops without a result: wait for quota, then let it continue.
     if (!r && quotaGate(p.role)) nudged = false;
     if (nudged) {
-      waitForOperator(agent, { status: 'blocked', question: 'Worker stopped without a valid result file.', _path: p.resultPath, _mtime: r?._mtime ?? 0 });
-      continue;
+      waitForOperator(agent, { status: 'blocked', question: 'Worker stopped without a valid result file.', _path: p.resultPath, _mtime: r?._mtime ?? 0 },
+        { decisions: routesDecisions });
+      continue; // a valid result, or a new question for the advisor, is read at the top of the loop
     }
     nudged = true;
     const why = r && p.role === 'acceptance' && r.status === 'done' ? acceptanceProblem(r) : null;
@@ -400,8 +402,9 @@ export function showQuestion(agent, r) {
 
 // Wait for the operator to answer a worker in its own tab. Once the worker is working on the answer,
 // show the live line and apply the compaction limit, exactly as for any other step. Returns the
-// worker's next non-question result, or null when the step was interrupted as a runaway.
-export function waitForOperator(agent, r, { show = showQuestion, track = true } = {}) {
+// worker's next non-question result, or null when the step was interrupted as a runaway. With `decisions`,
+// a new needs-decision result is returned too, for the caller to route to the advisor.
+export function waitForOperator(agent, r, { show = showQuestion, track = true, decisions = false } = {}) {
   let waitStart = Date.now();
   let answered = false;
   emit('operator_wait_start', { role: agent.role, status: r.status, question: r.brief?.question ?? r.question ?? r.summary ?? null });
@@ -413,9 +416,9 @@ export function waitForOperator(agent, r, { show = showQuestion, track = true } 
     const next = readResult(r._path, r._mtime + 1);
     if (next && next._mtime > r._mtime) {
       if (!answered) emit('operator_wait_end', { role: agent.role, waitedMs: Date.now() - waitStart });
-      if (!HUMAN_STATUSES.has(next.status)) {
+      if (!HUMAN_STATUSES.has(next.status) || (decisions && next.status === 'needs-decision')) {
         clearLive();
-        log(`${state.cur.slice} ${agent.role} finished after operator input`, { quiet: true });
+        log(`${state.cur.slice} ${agent.role} ${next.status === 'needs-decision' ? 'asked for a decision' : 'finished'} after operator input`, { quiet: true });
         return next;
       }
       r = next; // it asks again
