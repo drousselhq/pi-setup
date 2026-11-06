@@ -22,6 +22,13 @@ its records, the handoff, the owner's previous decisions and your result file.
   defaults below.
 - Notice process problems worth mentioning, e.g. a question that should have been asked earlier,
   or two workers holding different information.
+- Check that the relay can carry out each option you will offer. Each worker step runs in one
+  session; a re-review keeps the same reviewer session; the relay cannot start a separate or fresh
+  session within a step. So no option may give a reviewer evidence to produce at scale (collecting,
+  transcribing or building evidence, rather than checking it), or promise a separate session inside
+  the slice. When independent work or a fresh session is genuinely needed, offer a prerequisite slice
+  if your assignment says one can be inserted; otherwise say plainly in the option that the owner
+  will have to start that session by hand, or add a slice after this one to the plan.
 
 ## 2. Write the brief (result status `needs-decision`)
 

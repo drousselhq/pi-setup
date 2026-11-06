@@ -22,6 +22,13 @@ result file you must write before stopping.
 - When the handoff requires something reviewed or approved before implementation (a protocol, a
   contract, a test plan), make it its own slice ahead of the work it gates; that slice's review is
   the prior review. Never put a "reviewed before" condition in the same slice as the work.
+- Producing evidence at scale is implementation work: collecting or running sessions, transcribing
+  or reading many images or documents, building reference data. Give it to a slice's implementer;
+  never leave it to a review step, which checks work and is not sized to produce it. When the
+  handoff or a decision requires independent work (a second reading compared with a first, a
+  worker that must not see some material), make each such part, and any comparison of them, its
+  own slice, with a `Notes:` line naming what it may read and where its output goes. Each slice
+  starts new workers; the relay cannot start a separate session within a step.
 - Mark `Needs: architecture` only when the slice has a consequential design choice that the
   handoff and existing code do not settle (ownership, data format, concurrency, public contract).
   Mark `Needs: scout` only when the implementer would otherwise have to explore a large unknown

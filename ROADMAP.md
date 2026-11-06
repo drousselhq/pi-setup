@@ -13,6 +13,8 @@ Items are ordered by expected value.
 | **Mechanical detection of weakened tests:** deleted tests, new skips and suppressions, gate exclusions | Weakening a gate now needs authority in the implementer, final-step and reviewer instructions | Weakening recurs despite that (cases so far: two final verification steps) |
 | **The reviewer derives one independent input per acceptance clause** on slices without an acceptance phase | It risks padding, and the pilot will show what independent tests are worth | After the acceptance pilot |
 | **Reviewer model or thinking changes; a separate provider for acceptance tests** | No evidence yet that either helps | Pilot data or an evaluation set shows a difference |
+| **Helper sessions requested by a worker:** the relay starts a separate fresh session (given model, prompt, allowed inputs and output places), links its record into the step, and resumes the worker | The planner and advisor now put evidence production and independent readings in their own slices; one project run (November 2026) needed two such sessions, started by hand | Owner-launched helper sessions recur despite the planning rule |
+| **A separate compaction limit for reviewers** | A reviewer stop in a project run came from production work misplaced in a review step; a higher limit would only have cost more | A reviewer's ordinary review, not misplaced work, hits the limit |
 | **Risk routing from the actual diff** (more evidence for persistence, concurrency, numerical or real-time changes) | The council's decision classes cover part of it | Data shows risky changes passing with the ordinary evidence |
 
 Project-owned, not here: mutation testing (`cargo-mutants --in-diff`), property and differential tests, and
