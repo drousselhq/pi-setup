@@ -12,7 +12,7 @@ import { cfg, ctx, HUMAN_STATUSES, plural, state, STATUSES, TEMPLATE } from './r
 import { save } from './store.mjs';
 import { currentSlice } from './transitions.mjs';
 import { sessionTotals, stepUsage } from './usage.mjs';
-import { agentTurns, markRunaway, prompt, settle, submitPendingInput, waitForOperator } from './waiting.mjs';
+import { agentTurns, closeTabWindow, markRunaway, prompt, recordTabAnswer, settle, submitPendingInput, waitForOperator } from './waiting.mjs';
 
 export function sliceDir(id) {
   const dir = path.join(ctx.topicDir, 'slices', id);
@@ -257,6 +257,10 @@ export function collect() {
   }
   let nudged = false;
   const routesDecisions = advisorEnabled() && p.role !== 'advisor';
+  recordTabAnswer(p); // a window a killed relay closed but did not record
+  // The relay's own wait (after a missing result) stays open across a restart while the worker may still work; it
+  // is closed just before the relay sends that worker anything, so a relay prompt never reads as a typed answer.
+  const beforePrompt = () => { if (p.tabAnswer?.relayMade && !p.tabAnswer.to) closeTabWindow(p, Date.now()); };
   for (;;) {
     const { agent, fresh } = ensureAgent(p.role);
     const liveAgent = agentAlive(agent);
@@ -267,6 +271,8 @@ export function collect() {
     let r = readResult(p.resultPath, p.sentAt);
     // The question a decision answered (its exact version, or older) is never read as a new result.
     if (r && p.answered !== undefined && r._mtime <= p.answered) r = null;
+    // A wait for the owner whose end a killed relay did not save: the newer result ends its window.
+    if (r && p.tabAnswer && !p.tabAnswer.to && r._mtime > p.tabAnswer.from) closeTabWindow(p, r._mtime);
     if (!r && agent.name !== p.agent) {
       // Restarted agent: deliver the step again rather than nudging about a message it never saw.
       p.agent = agent.name;
@@ -275,6 +281,7 @@ export function collect() {
       p.delivered = false;
       p.deliveryTurns = agentTurns(agent);
       save();
+      beforePrompt();
       emit('redeliver', { role: p.role, purpose: p.purpose, agent: agent.name });
       log(`${state.cur.slice} re-delivering ${p.role} (${p.purpose}) to restarted agent`, { quiet: true });
       event(C.gray('\u21ba'), `${roleTag(p.role)} ${C.dim(`re-sending "${p.purpose}" to the restarted session`)}`);
@@ -299,7 +306,7 @@ export function collect() {
       if (outcome) continue; // the worker has the owner's decision; collect its next result
     }
     if (r && HUMAN_STATUSES.has(r.status)) {
-      r = waitForOperator(agent, r, { decisions: routesDecisions });
+      r = waitForOperator(agent, r, { decisions: routesDecisions, tab: p });
       if (r?.status === 'needs-decision') continue; // the worker's new question goes to the advisor
       if (p.runaway) {
         return { status: 'runaway', summary: `Interrupted after ${plural(p.runaway.compactions, 'compaction')} and ${plural(p.runaway.turns, 'turn')} in one step.` };
@@ -326,14 +333,15 @@ export function collect() {
     if (nudged) {
       const invalid = r && STATUSES[p.role].includes(r.status) ? resultProblem(p.role, r) : null;
       const question = invalid ? `The worker's result file is still invalid: ${invalid}.` : 'Worker stopped without a valid result file.';
-      waitForOperator(agent, { status: 'blocked', question, _path: p.resultPath, _mtime: r?._mtime ?? 0 },
-        { decisions: routesDecisions });
+      waitForOperator(agent, { status: 'blocked', question, relayMade: true, _path: p.resultPath, _mtime: r?._mtime ?? 0 },
+        { decisions: routesDecisions, tab: p });
       continue; // a valid result, or a new question for the advisor, is read at the top of the loop
     }
     nudged = true;
     const why = r && STATUSES[p.role].includes(r.status) ? resultProblem(p.role, r) : null;
     const problem = r ? `Your result file is invalid (${why ?? r.summary ?? `status "${r.status}"`}).`
       : 'You stopped without writing the result file (possibly cut off by a provider error). If your step is unfinished, continue it now.';
+    beforePrompt();
     emit('nudge', { role: p.role, purpose: p.purpose, reason: r ? 'invalid-result' : 'missing-result' });
     log(`${state.cur.slice} ${p.role}: ${problem} Nudging once.`, { quiet: true });
     event(C.yellow('!'), `${roleTag(p.role)} ${C.yellow('no valid result yet')} ${C.dim('\u00b7 reminding it once')}`, problem);

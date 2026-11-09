@@ -60,16 +60,24 @@ export function nextDecisionId() {
   return `D${(text.match(/^## D\d+ /gm) ?? []).length + 1}`;
 }
 
-// Appends decision `id` to decisions.md unless it is there already (a replay after a kill), atomically.
-export function recordDecision(slice, final, attribution, id) {
+// Appends `entry` to decisions.md unless a line matching `present` is there already (a replay after a kill),
+// atomically. Returns whether it wrote.
+export function appendToDecisions(present, entry) {
   const header = `# Decisions: ${ctx.topic}\n\nRecorded by pi-relay: the owner's answers and, where enabled, the advisory council's decisions. Every worker reads this file.\n`;
   const text = fs.existsSync(ctx.decisions) ? fs.readFileSync(ctx.decisions, 'utf8') : header;
+  if (present.test(text)) return false;
+  writeFileAtomic(ctx.decisions, `${text.trimEnd()}\n\n${entry}`);
+  return true;
+}
+
+// Appends decision `id` to decisions.md unless it is there already (a replay after a kill), atomically.
+export function recordDecision(slice, final, attribution, id) {
   const title = String(final.title ?? 'Decision').replace(/\s+/g, ' ').trim();
-  if (new RegExp(`^## ${id} \u00b7 `, 'm').test(text)) return { title, written: false };
   const deferral = final.deferral
     ? `\n**Deferred.**\n${Object.entries(DEFERRAL_FIELDS).map(([k, name]) => `- ${name}: ${String(final.deferral[k]).trim()}`).join('\n')}\n` : '';
-  writeFileAtomic(ctx.decisions, `${text.trimEnd()}\n\n## ${id} \u00b7 ${new Date().toISOString().slice(0, 10)} \u00b7 ${slice.id} \u00b7 ${title}\n\n${final.decision.trim()}\n${deferral}\n${attribution}\n`);
-  return { title, written: true };
+  const written = appendToDecisions(new RegExp(`^## ${id} \u00b7 `, 'm'),
+    `## ${id} \u00b7 ${new Date().toISOString().slice(0, 10)} \u00b7 ${slice.id} \u00b7 ${title}\n\n${final.decision.trim()}\n${deferral}\n${attribution}\n`);
+  return { title, written };
 }
 
 // Whether a prerequisite slice can be added now, for the advisor's assignment and for deliver().

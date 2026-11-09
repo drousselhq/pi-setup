@@ -108,7 +108,14 @@ the terminal.
   your overrule are there to catch.
 - **`blocked`:** you get a notification with the problem. Answer or fix it, then reply to the worker in its
   tab. It continues and rewrites its result file, and the relay picks that up. If it then asks for a decision,
-  that question goes through the advisor (and council) like any other.
+  that question goes through the advisor (and council) like any other. What you type in a worker's tab while it
+  waits for you (after `blocked`, a question the advisor could not take, or a missing result) is recorded in
+  `decisions.md` as "Tab answer": the question and an excerpt of what was typed (text only, at most 2,000
+  characters), so later workers see it. It is an unverified excerpt, not a decision brief (Pi does not record who
+  typed a message); edit or remove it in `decisions.md` if it should not stand. An answer typed in a worker you then
+  replace with `--fresh` is not recorded: put what matters in `--note`.
+- **A permission prompt** (a worker waiting for you to allow a command): you get a notification, and the console,
+  `log.md` and the `permission_wait` event show an excerpt of the worker's screen, for workers and council members.
 - **A worker only a new session can fix** (it saw material it must not see, or it is confused beyond repair):
   stop the relay (Ctrl-C) and run `pi-relay <topic> --fresh <role>`, optionally with `--note "..."` for
   anything the new session must know that is not in the topic's files (for example a permission you gave in the
@@ -156,7 +163,7 @@ the terminal.
 | `handoff.md` | you / `/handoff` | intent, scope, acceptance, authority |
 | `plan.md` | planner or you | slices (format below); can be edited between slices |
 | `relay.json` | you, optional | per-topic overrides of `config.json` |
-| `decisions.md` | relay | every decision of the run, each marked as decided by you or by the council; every assignment points workers to it |
+| `decisions.md` | relay | every decision of the run, each marked as decided by you or by the council, and the answers typed in workers' tabs; every assignment points workers to it |
 | `slices/<id>/*.md` | workers | scout, architecture, acceptance, implementation and review artifacts |
 | `slices/<id>/acceptance-original/` | script | the acceptance tests as their worker wrote them (see below) |
 | `relay/NNN-<role>.md` | script | assignment given to a worker |
@@ -177,7 +184,7 @@ One JSON object per line. Every event has `t`, `run` (one ID per relay process),
 | `agent_start_recovered` | role, agent, tab (a worker whose start was interrupted, closed before starting anew) |
 | `step_sent` / `step_result` | role, purpose / status, verdict, blocking, summary, question, verification, checks, durationMs, usage |
 | `operator_wait_start` / `operator_wait_end` | role, status, question / waitedMs |
-| `permission_wait` | role, waitedMs |
+| `permission_wait` | role, waitedMs (workers), screen (an excerpt of the worker's screen) |
 | `advisor_start`, `advisor_brief` | workerRole, question / the whole brief: title, question, context, options (every field), recommended, reason, notes, ownerNeeded |
 | `owner_decision`, `council_decision` | id, title, decision, chosen (the option's number, or null), workerRole, replies (roles), prerequisite (a prerequisite slice's title) |
 | `council_start`, `council_vote`, `council_escalation` | options, members / member, model, choice, classes, confidence, reversibility, ownerNeeded or failed / reasons |

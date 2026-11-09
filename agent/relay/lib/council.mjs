@@ -9,7 +9,7 @@ import { quotaGate } from './quota.mjs';
 import { cfg, ctx, herdr, notify, RelayStop, sleep, state, TEMPLATE } from './runtime.mjs';
 import { validSliceSpec } from './steps.mjs';
 import { save } from './store.mjs';
-import { agentTurns, submitPendingInput, wroteSince } from './waiting.mjs';
+import { agentTurns, permissionNotice, submitPendingInput, wroteSince } from './waiting.mjs';
 
 // The decision classes (relay protocol). The owner keeps cfg.council.ownerClasses (default E to I).
 export const CLASSES = {
@@ -261,7 +261,8 @@ function waitForVotes(cn) {
       if (status === 'working' || status === 'blocked' || status === 'unknown') {
         if (status === 'blocked' && !m.blockedNotified) {
           m.blockedNotified = true;
-          notify(`Relay ${ctx.topic}: ${role} needs you`, `Answer the permission request in tab "${agent.label}".`);
+          const { screen } = permissionNotice(agent);
+          emit('permission_wait', { role, screen });
         }
         if (Date.now() - m.sentAt > limit) fail(role, m, `no vote after ${fmtDuration(limit)}`);
         continue;

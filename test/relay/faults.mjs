@@ -83,7 +83,8 @@ function drive(s, k, mode) {
     Date.now = realNow;
   }
   const stops = p.events().filter((e) => e.type === 'run_stop' && e.kind === 'stop').map((e) => e.reason.slice(0, 60));
-  const decisions = fs.existsSync(p.file('decisions.md')) ? p.read('decisions.md').replace(/^(## D\d+) · [\d-]+ ·/gm, '$1 ·') : '';
+  const decisions = fs.existsSync(p.file('decisions.md'))
+    ? p.read('decisions.md').replace(/^(## D\d+|## Tab answer) · [\d-]+ ·/gm, '$1 ·').replace(/\d+-(\w+)-(\w+)\.result\.json#/g, 'N-$1-$2.result.json#') : '';
   const sessions = {}; // distinct sessions per slice:role that received prompts
   for (const c of h.prompts) (sessions[`${c.slice}:${c.role}`] ??= new Set()).add(c.session);
   return {

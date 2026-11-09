@@ -102,13 +102,7 @@ export class FakeHerdr {
     return {
       herdr: (args) => this.handle(args),
       git: (args, cwd, env) => spawnSync('git', args, { cwd, encoding: 'utf8', ...(env ? { env: { ...process.env, ...env } } : {}) }),
-      sleep: () => {
-        // A relay waiting with nothing scheduled would wait forever: fail the test instead of hanging it.
-        if (++this.idleSleeps > 200) throw new Error('harness: the relay is waiting for something that will never happen');
-        const due = this.pending.splice(0);
-        if (due.length) this.idleSleeps = 0;
-        for (const fn of due) fn();
-      },
+      sleep: () => this.tick(),
       notify: () => {},
       write: (t) => { this.output += t; },
       isTTY: () => false,
@@ -125,6 +119,15 @@ export class FakeHerdr {
   }
 
   run(args = [TOPIC]) { return runRelay(args, this.io()); }
+
+  // Time passes: what was scheduled with later() happens. A relay waiting with nothing scheduled would wait forever:
+  // fail the test instead of hanging it.
+  tick() {
+    if (++this.idleSleeps > 200) throw new Error('harness: the relay is waiting for something that will never happen');
+    const due = this.pending.splice(0);
+    if (due.length) this.idleSleeps = 0;
+    for (const fn of due) fn();
+  }
 
   ok(result) { return { status: 0, stdout: JSON.stringify({ result }), stderr: '' }; }
   err(code, message) { return { status: 1, stdout: JSON.stringify({ error: { code, message } }), stderr: '' }; }
@@ -148,19 +151,26 @@ export class FakeHerdr {
       fs.mkdirSync(path.dirname(session), { recursive: true });
       if (!fs.existsSync(session)) fs.writeFileSync(session, '');
       const role = name.split('-').at(-2);
-      this.agents.set(name, { tab: `t${pane.slice(1)}`, alive: true, session, role });
+      this.agents.set(name, { tab: `t${pane.slice(1)}`, alive: true, session, role, status: 'idle', screen: '' });
       this.starts.push({ name, role, session, resumed: i > 0 });
       return this.ok({ agent: { agent_session: { value: session } } });
     }
     const ag = this.agents.get(name);
     if (!ag?.alive) return this.err('agent_not_found', `no agent ${name}`);
+    // A fake agent is idle between prompts unless a test sets its status (working, blocked on a permission
+    // prompt): a wait for another status lets scheduled events happen, then times out, as in Herdr.
     if (cmd === 'wait') {
-      // Fake agents are idle between prompts: a wait for another status times out, as in Herdr.
       const until = a.flatMap((x, i) => (x === '--until' ? [a[i + 1]] : []));
-      if (until.length && !until.some((u) => u === 'idle' || u === 'done')) return this.err('timeout', `${name} stayed idle`);
-      return this.ok({ agent: { agent_status: 'idle' } });
+      const reached = () => (until.length ? until.includes(ag.status) : ag.status !== 'working');
+      if (!reached() && ag.status !== 'idle') this.tick();
+      return reached() ? this.ok({ agent: { agent_status: ag.status } }) : this.err('timeout', `${name} is ${ag.status}`);
     }
-    if (cmd === 'get' || cmd === 'send-keys') return this.ok({ agent: { agent_status: 'idle' } });
+    if (cmd === 'get') return this.ok({ agent: { agent_status: ag.status } });
+    if (cmd === 'send-keys') {
+      if (a.includes('Escape') && ag.status === 'working') ag.status = 'idle'; // interrupted
+      return this.ok({ agent: { agent_status: ag.status } });
+    }
+    if (cmd === 'read') return { status: 0, stdout: ag.screen ?? '', stderr: '' };
     if (cmd === 'prompt') {
       const text = a[3];
       const resultPath = (text.match(/\S+\.result\.json/g) ?? []).at(-1);
@@ -174,6 +184,8 @@ export class FakeHerdr {
         assignment: () => fs.readFileSync(assignmentPath, 'utf8'),
       };
       this.prompts.push(call);
+      // Pi records every prompt in the session as a user message, as it does what the owner types.
+      fs.appendFileSync(ag.session, `${JSON.stringify({ type: 'message', timestamp: new Date(Date.now()).toISOString(), message: { role: 'user', content: [{ type: 'text', text } ] } })}\n`);
       this.worker({
         ...call,
         p: this.p,
@@ -181,6 +193,10 @@ export class FakeHerdr {
         later: (fn) => this.pending.push(fn),
         // The owner's answer arrives after the brief: give it a later mtime than the file it replaces.
         answer: (obj) => this.pending.push(() => writeResult(resultPath, obj, { after: resultPath })),
+        // The agent's state as Herdr reports it, its screen, and what the owner types in its tab.
+        status: (s) => { ag.status = s; },
+        screen: (text) => { ag.screen = text; },
+        type: (text) => fs.appendFileSync(ag.session, `${JSON.stringify({ type: 'message', timestamp: new Date(Date.now()).toISOString(), message: { role: 'user', content: [{ type: 'text', text }] } })}\n`),
       });
       // It worked on the prompt: its session records a turn, as a real agent's does when it responds.
       fs.appendFileSync(ag.session, `${JSON.stringify({ type: 'message', message: { role: 'assistant', usage: { input: 1, output: 1 } } })}\n`);
