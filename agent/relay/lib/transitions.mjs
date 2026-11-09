@@ -4,7 +4,7 @@ import { acceptanceStep, implementerNote, PREP_ORDER, recordAcceptance, reviewer
 import { closeAgent, closeAll } from './agents.mjs';
 import { sliceChanged } from './changes.mjs';
 import { C, compactionText, emit, event, fmtDuration, GUTTER, log, out, resultIcon, resultLabel, roleTag, shortModel } from './console.mjs';
-import { FINAL_SLICE, parsePlan, PLAN_FORMAT, PLAN_SLICE, progress, progressText } from './plan.mjs';
+import { checkPlan, FINAL_SLICE, parsePlan, PLAN_FORMAT, PLAN_SLICE, progress, progressText } from './plan.mjs';
 import { cfg, ctx, git, HELP_STATUSES, now, plural, RelayStop, state } from './runtime.mjs';
 import { artifactPath, queue } from './steps.mjs';
 import { save } from './store.mjs';
@@ -26,7 +26,8 @@ export function firstMessage(slice) {
   if (slice.id === 'PLAN') {
     return { role: 'planner', purpose: 'plan', initial: true, text: `Break the handoff into slices and write ${ctx.plan} in the relay plan format:\n\n${PLAN_FORMAT}\n\n`
       + 'Use exactly `## S<n>: title` headings. `Needs:` is `none`, or any of `scout`, `architecture` and `acceptance` for '
-      + 'preparation that runs before implementation. The relay counts the `Acceptance:` bullets.' };
+      + 'preparation that runs before implementation; it may also name earlier slices (`S1`, `S2a`, `S2\u2013S4`) to document '
+      + 'their order (slices always run in file order). Nothing else may follow `Needs:`. The relay counts the `Acceptance:` bullets.' };
   }
   if (prep.length) return prepMessage(prep[0], slice);
   return implementMessage(slice);
@@ -194,10 +195,8 @@ function applyResult(c, p, r) {
 
   if (p.role === 'planner') {
     closeAgent('planner');
+    checkPlan('The plan the planner wrote', true);
     const slices = parsePlan();
-    if (!slices.length) {
-      throw new RelayStop(`The planner finished but ${ctx.plan} has no "## S1: ..." slices. Fix plan.md, then start pi-relay ${ctx.topic} again.`);
-    }
     log(`PLAN has ${slices.length} slices: ${slices.map((s) => s.id).join(', ')}`, { quiet: true });
     event(C.green('\u2713'), `${C.bold(`plan: ${slices.length} slice${slices.length === 1 ? '' : 's'}`)}`, slices.map((s) => `${s.id}  ${s.title}${s.needs.length ? `  [${s.needs.join(', ')}]` : ''}`).join('\n'));
     return finishSlice();

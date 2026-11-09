@@ -7,7 +7,7 @@ import { C, callout, compactionText, emit, heading, log, out, purposeLabel, rese
 import { checkCouncilConfig } from './council.mjs';
 import { replaceWorker } from './fresh.mjs';
 import { realIo } from './io.mjs';
-import { FINAL_SLICE, nextSlice, parsePlan, PLAN_SLICE, planSummary, progress, progressText, sliceProgress } from './plan.mjs';
+import { checkPlan, FINAL_SLICE, nextSlice, parsePlan, PLAN_SLICE, planSummary, progress, progressText, sliceProgress } from './plan.mjs';
 import { resumeSetAside, setAsideForEarlierSlice } from './prerequisites.mjs';
 import { usageCache } from './quota.mjs';
 import { cfg, ctx, git, herdr, io, notify, plural, RelayStop, RUN_ID, setCfg, setIo, setRunId, setState, state } from './runtime.mjs';
@@ -135,6 +135,9 @@ export function main(args) {
   });
   log(`relay started in ${ctx.project} (topic ${topic})`, { quiet: true });
   banner();
+  // Before any further work, a malformed plan must not silently drop slices or preparation. While the planner
+  // is still writing it, its own finish checks it instead.
+  if (state.cur?.slice !== 'PLAN') checkPlan();
   if (opts.fresh) replaceWorker(opts.fresh, opts.note);
   setAsideForEarlierSlice();
   for (let slice = state.cur ? currentSlice() : nextSlice(); slice; slice = nextSlice()) runSlice(slice);

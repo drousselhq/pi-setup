@@ -346,7 +346,7 @@ test('a planner result without slices stops the relay, and a corrected plan.md r
   const p = makeProject({ plan: null });
   const h = new FakeHerdr(p, (c) => (c.role === 'planner' ? c.write(done('planned')) : standard(c)));
   assert.equal(h.run(), 2);
-  assert.match(p.log(), /STOPPED: The planner finished but .* has no "## S1: \.\.\." slices\. Fix plan\.md/);
+  assert.match(p.log(), /STOPPED: The plan the planner wrote cannot be used as written: \S+plan\.md does not exist\. Fix \S+plan\.md/);
   assert.equal(p.state().cur.pending.role, 'planner', 'the planner result stays pending');
   fs.writeFileSync(p.file('plan.md'), '# Plan\n\n## S1: Only\nNeeds: none\nAcceptance:\n- x\n');
   const before = h.prompts.length;

@@ -146,10 +146,26 @@ export function readResult(file, since) {
   }
 }
 
+// Why a result with an allowed status is still unusable, in words the worker can act on; null when usable.
+export function resultProblem(role, r) {
+  if (role === 'reviewer' && r.status === 'done') {
+    if (!['accept', 'changes-required'].includes(r.verdict)) return '"verdict" must be "accept" or "changes-required"';
+    const blocking = r.blocking ?? [];
+    if (!Array.isArray(blocking)) return '"blocking" must be a list of finding IDs';
+    if (r.verdict === 'accept' && blocking.length) {
+      return `verdict "accept" lists blocking findings (${blocking.join(', ')}): accept only with none, or set "changes-required"`;
+    }
+    if (r.verdict === 'changes-required' && !blocking.length) {
+      return 'verdict "changes-required" lists no blocking finding: give their IDs in "blocking", or accept';
+    }
+  }
+  if (role === 'acceptance' && r.status === 'done') return acceptanceProblem(r);
+  return null;
+}
+
 export function valid(role, r) {
   if (!r || !STATUSES[role].includes(r.status)) return false;
-  if (role === 'reviewer' && r.status === 'done') return ['accept', 'changes-required'].includes(r.verdict);
-  if (role === 'acceptance' && r.status === 'done') return acceptanceProblem(r) === null;
+  if (resultProblem(role, r)) return false;
   if (role === 'advisor' && r.status === 'done') {
     return typeof r.decision === 'string' && r.decision.trim() !== '' && (r.slice === undefined || r.slice === null || validSliceSpec(r.slice))
       && (r.deferral === undefined || r.deferral === null || validDeferral(r.deferral));
@@ -371,12 +387,14 @@ export function collect() {
     // A worker cut off by a usage limit stops without a result: wait for quota, then let it continue.
     if (!r && quotaGate(p.role)) nudged = false;
     if (nudged) {
-      waitForOperator(agent, { status: 'blocked', question: 'Worker stopped without a valid result file.', _path: p.resultPath, _mtime: r?._mtime ?? 0 },
+      const invalid = r && STATUSES[p.role].includes(r.status) ? resultProblem(p.role, r) : null;
+      const question = invalid ? `The worker's result file is still invalid: ${invalid}.` : 'Worker stopped without a valid result file.';
+      waitForOperator(agent, { status: 'blocked', question, _path: p.resultPath, _mtime: r?._mtime ?? 0 },
         { decisions: routesDecisions });
       continue; // a valid result, or a new question for the advisor, is read at the top of the loop
     }
     nudged = true;
-    const why = r && p.role === 'acceptance' && r.status === 'done' ? acceptanceProblem(r) : null;
+    const why = r && STATUSES[p.role].includes(r.status) ? resultProblem(p.role, r) : null;
     const problem = r ? `Your result file is invalid (${why ?? r.summary ?? `status "${r.status}"`}).`
       : 'You stopped without writing the result file (possibly cut off by a provider error). If your step is unfinished, continue it now.';
     emit('nudge', { role: p.role, purpose: p.purpose, reason: r ? 'invalid-result' : 'missing-result' });

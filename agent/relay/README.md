@@ -174,7 +174,10 @@ Acceptance:
 - <observable condition>
 Notes: <entry points, scope limits, dependencies on earlier slices>
 
-## S2: ...
+## S2: <slice title>
+Needs: S1
+Acceptance:
+- <observable condition>
 
 ## Not planned
 - <useful ideas outside the handoff's scope>
@@ -182,7 +185,10 @@ Notes: <entry points, scope limits, dependencies on earlier slices>
 
 The relay writes this format into the planner's assignment. Use exactly `## S<n>: title` headings.
 `Needs:` is `none`, or any of `scout`, `architecture` and `acceptance` for preparation that runs before
-implementation, always in that order.
+implementation, always in that order. It may also name earlier slices (`S1`, `S2a`, a range such as `S2–S4`)
+to document their order; slices always run in file order. Before any work, and again before each new slice,
+the relay stops if `plan.md` has no slices, has a heading meant as a slice that does not parse (`## Step 1: ...`,
+`## Slice 2 ...`), or has an empty `Needs:` or a value it does not know, naming the line.
 The relay counts the `Acceptance:` bullets. Slice IDs (`S1`, `S2`, `S2a`…) must stay stable. Finished slices are tracked by ID in `state.json`.
 
 ### Result file
@@ -193,8 +199,9 @@ The relay counts the `Acceptance:` bullets. Slice IDs (`S1`, `S2`, `S2a`…) mus
   "blocking": ["R1"], "tests": ["path"], "checks": ["cmd → pass"], "artifact": "path" }
 ```
 
-`verdict` and `blocking` are for the reviewer only, `tests` for the acceptance worker only. Allowed statuses
-differ by role (see the assignment).
+`verdict` and `blocking` are for the reviewer only (`accept` lists no blocking finding, `changes-required` at
+least one; a contradiction is an invalid result: one reminder naming it, then you), `tests` for the acceptance
+worker only. Allowed statuses differ by role (see the assignment).
 
 ### Acceptance tests before the code
 
