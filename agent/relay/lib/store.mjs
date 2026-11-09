@@ -59,8 +59,19 @@ export function writeFileAtomic(file, content) {
 // Only the relay holding the lock writes the topic's state, log and events (see runRelay()). The lock
 // file is created exclusively; a lock left by a relay that is no longer running is replaced once, and
 // so is one that stayed empty or unreadable (a relay killed while writing it) for more than a minute.
-// (Two relays replacing the same stale lock at the same moment can still both start: not guarded.)
+// A stale lock is removed only under an exclusively created guard (lock.reclaim), after reading it again:
+// two relays reclaiming it at the same moment cannot both start, nor remove each other's new lock.
 const UNWRITTEN_LOCK_MS = 60_000;
+const YOUNG_GUARD_MS = 5_000;
+
+// A lock or guard file: its text, age, pid and identity (inode and time: the same text can be another file).
+function readLockFile(file) {
+  try {
+    const st = fs.statSync(file);
+    const text = fs.readFileSync(file, 'utf8').trim();
+    return { text, age: Date.now() - st.mtimeMs, pid: /^\d+$/.test(text) ? Number(text) : null, id: `${st.ino}:${st.mtimeMs}` };
+  } catch { return { text: null, age: 0, pid: null, id: null }; } // removed meanwhile
+}
 
 export function acquireLock() {
   const lock = path.join(ctx.relayDir, 'lock');
@@ -71,24 +82,61 @@ export function acquireLock() {
     } catch (e) {
       if (e.code !== 'EEXIST') throw e;
     }
-    let text = null;
-    let age = 0;
-    try {
-      age = Date.now() - fs.statSync(lock).mtimeMs;
-      text = fs.readFileSync(lock, 'utf8').trim();
-    } catch { /* removed meanwhile: try again */ }
-    const pid = /^\d+$/.test(text ?? '') ? Number(text) : null;
-    const live = text !== null && (pid ? io.processAlive(pid) : age < UNWRITTEN_LOCK_MS);
+    const held = readLockFile(lock);
+    const live = held.text !== null && (held.pid ? io.processAlive(held.pid) : held.age < UNWRITTEN_LOCK_MS);
     if (attempt > 0 || live) {
-      throw new RelayStop(`Another relay${pid ? ` (pid ${pid})` : ''} is running this topic. If none is, `
+      throw new RelayStop(`Another relay${held.pid ? ` (pid ${held.pid})` : ''} is running this topic. If none is, `
         + `delete ${path.relative(ctx.project, lock)} and start pi-relay ${ctx.topic} again.`);
     }
-    if (text !== null) fs.rmSync(lock, { force: true }); // left by a relay that is no longer running
+    if (held.text !== null && reclaimStale(lock, held)) break; // left by a relay that is no longer running
   }
+  removeOrphanGuard(`${lock}.reclaim`);
   ctx.locked = true;
   io.onExit(() => {
     try { if (fs.readFileSync(lock, 'utf8') === String(io.pid)) fs.unlinkSync(lock); } catch { /* gone */ }
   });
+}
+
+// Holding the guard, removes the stale lock `held` if it is still the very same file and creates this relay's lock;
+// returns whether it holds the lock (false: another relay was faster). A guard left by a relay killed while holding
+// it cannot be told from one in use without reopening the race: after a short wait for a young one, the relay stops
+// and names it (the owner deletes it).
+function reclaimStale(lock, held) {
+  const guard = `${lock}.reclaim`;
+  for (let i = 0; ; i++) {
+    try {
+      fs.writeFileSync(guard, String(io.pid), { flag: 'wx' });
+      break;
+    } catch (e) {
+      if (e.code !== 'EEXIST') throw e;
+    }
+    const g = readLockFile(guard);
+    if (g.text === null && i < 10) continue; // released meanwhile (or unreadable: bounded)
+    if (g.age < YOUNG_GUARD_MS && i < 10) { io.sleep(500); continue; } // another relay is taking the lock over
+    if (g.pid && io.processAlive(g.pid)) throw new RelayStop(`Another relay (pid ${g.pid}) is starting this topic.`);
+    throw new RelayStop(`No relay is running this topic, but one was killed while taking over its lock. Delete `
+      + `${path.relative(ctx.project, guard)} and start pi-relay ${ctx.topic} again.`);
+  }
+  try {
+    if (readLockFile(lock).id === held.id) fs.rmSync(lock, { force: true }); // still the same stale lock file
+    try {
+      fs.writeFileSync(lock, String(io.pid), { flag: 'wx' }); // created and written before the guard is released
+      return true;
+    } catch (e) {
+      if (e.code !== 'EEXIST') throw e;
+      return false;
+    }
+  } finally {
+    fs.rmSync(guard, { force: true });
+  }
+}
+
+// A guard left by a relay killed after it removed the stale lock (the lock was then free): once this relay holds the
+// lock, a guard whose relay is gone is removed, so it cannot block a later takeover.
+function removeOrphanGuard(guard) {
+  const g = readLockFile(guard);
+  if (g.text === null) return;
+  if (g.pid ? !io.processAlive(g.pid) : g.age >= YOUNG_GUARD_MS) fs.rmSync(guard, { force: true });
 }
 
 // ---------- plan ----------

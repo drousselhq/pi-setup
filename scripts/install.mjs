@@ -7,7 +7,7 @@
 // detected instead of silently overwritten. Nothing is written unless every file can be applied.
 //
 //   node scripts/install.mjs              install, stopping on any drifted file
-//   node scripts/install.mjs --check      show what would change, write nothing
+//   node scripts/install.mjs --check      show what would change, write nothing (refused with --pull)
 //   node scripts/install.mjs --pull FILE  copy the installed FILE back into the checkout (to commit it)
 //   node scripts/install.mjs --force FILE overwrite the drifted installed FILE with the checkout's version
 //   --target DIR                          install somewhere else (used by the tests)
@@ -52,6 +52,7 @@ function parseArgs(argv) {
     else throw new Error(`Unknown argument: ${a}`);
   }
   for (const f of [...opts.pull, ...opts.force]) if (!f || f.startsWith('-')) throw new Error('--pull and --force need a file path');
+  if (opts.check && opts.pull.length) throw new Error('--check writes nothing, but --pull copies installed files into the checkout: use one or the other');
   return opts;
 }
 
@@ -63,7 +64,13 @@ function diff(a, b) {
 // Decides, per file, what installing would do. Returns { actions, conflicts }.
 export function plan(source, target, { force = [] } = {}) {
   const manifestFile = path.join(target, MANIFEST);
-  const manifest = fs.existsSync(manifestFile) ? JSON.parse(fs.readFileSync(manifestFile, 'utf8')) : null;
+  let manifest = null;
+  if (fs.existsSync(manifestFile)) {
+    try { manifest = JSON.parse(fs.readFileSync(manifestFile, 'utf8')); } catch (e) {
+      throw new Error(`The install manifest ${manifestFile} is unreadable (${e.message}). Restore it from a backup, or delete it: `
+        + 'every installed file that differs from the checkout then counts as drifted.');
+    }
+  }
   const installed = manifest?.files ?? {};
   const actions = [];
   const conflicts = [];
@@ -108,7 +115,10 @@ export function apply(source, target, actions) {
   const commit = spawnSync('git', ['-C', REPO, 'rev-parse', '--short', 'HEAD'], { encoding: 'utf8' }).stdout.trim();
   const dirty = spawnSync('git', ['-C', REPO, 'status', '--porcelain', '--', 'agent'], { encoding: 'utf8' }).stdout.trim() !== '';
   const manifest = { source: REPO, commit: commit + (dirty ? '+uncommitted' : ''), installedAt: new Date().toISOString(), files };
-  fs.writeFileSync(path.join(target, MANIFEST), `${JSON.stringify(manifest, null, 2)}\n`);
+  // Replaced whole: an install interrupted while writing it keeps the previous manifest, so it can be run again.
+  const manifestFile = path.join(target, MANIFEST);
+  fs.writeFileSync(`${manifestFile}.pi-setup-tmp`, `${JSON.stringify(manifest, null, 2)}\n`);
+  fs.renameSync(`${manifestFile}.pi-setup-tmp`, manifestFile);
 }
 
 function main() {

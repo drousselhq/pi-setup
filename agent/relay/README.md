@@ -43,7 +43,9 @@ decisions and relay-inserted slices are written whole and only once (their event
 replay). Running workers keep working while the script is stopped. Two exceptions: a worker the script was
 starting at that moment, and a worker it had just finished with; the next run closes their tabs (the first is
 started again). If a stop cannot be recorded (a full disk, for instance), the script still shows its cause in
-the terminal.
+the terminal. One case needs you: a relay killed during the moment it takes over a lock left by a dead relay
+(`relay/lock`) can leave `relay/lock.reclaim`; the next start, after a short wait, says so and asks you to delete it
+(handling it automatically would let two relays start at once).
 
 ## When it needs you
 
@@ -169,6 +171,7 @@ the terminal.
 | `relay/NNN-<role>.md` | script | assignment given to a worker |
 | `relay/NNN-<role>-<step>.result.json` | worker | the only thing the script reads from a worker (council votes: `NNN-council1-vote.result.json`) |
 | `relay/state.json`, `relay/log.md` | script | resumable state and a readable history |
+| `relay/lock`, `relay/lock.reclaim` | script | the running relay's pid; a guard held while a stale lock is taken over |
 | `relay/events.jsonl` | script | structured history for evaluation (see below) |
 
 ### events.jsonl

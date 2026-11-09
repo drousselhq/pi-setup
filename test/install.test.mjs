@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -85,4 +86,60 @@ test('a file removed from the checkout is removed if unchanged, a conflict if ch
   fs.writeFileSync(path.join(target, 'run.mjs'), '#!/usr/bin/env node\n');
   install(source, target);
   assert.equal(fs.existsSync(path.join(target, 'run.mjs')), false);
+});
+
+// ---------- an interrupted manifest write; the command line ----------
+
+test('an install interrupted while writing the manifest keeps the previous one, and can be run again', () => {
+  const { source, target } = dirs();
+  install(source, target);
+  fs.writeFileSync(path.join(source, 'prompts', 'plan.md'), 'plan v2\n');
+  const real = fs.writeFileSync;
+  fs.writeFileSync = (file, data, ...rest) => {
+    if (/\.pi-setup-install\.json/.test(String(file))) { real(file, String(data).slice(0, 10), ...rest); throw new Error('ENOSPC: simulated'); }
+    return real(file, data, ...rest);
+  };
+  try { assert.throws(() => apply(source, target, plan(source, target).actions), /simulated/); } finally { fs.writeFileSync = real; }
+  const again = plan(source, target); // the previous manifest is intact: plan.md, already replaced, counts as unchanged
+  assert.deepEqual(again.conflicts, []);
+  apply(source, target, again.actions);
+  assert.equal(fs.readFileSync(path.join(target, 'prompts', 'plan.md'), 'utf8'), 'plan v2\n');
+});
+
+test('an unreadable manifest is reported with what to do, not a parse error', () => {
+  const { source, target } = dirs();
+  install(source, target);
+  fs.writeFileSync(path.join(target, '.pi-setup-install.json'), '{"source":');
+  assert.throws(() => plan(source, target), /The install manifest .* is unreadable .* Restore it from a backup, or delete it/);
+});
+
+// The command line, on a copy of the script in a throwaway checkout: --pull writes into the checkout it runs from.
+function cli() {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-setup-cli-'));
+  fs.mkdirSync(path.join(root, 'scripts'));
+  fs.copyFileSync(path.join(path.dirname(new URL(import.meta.url).pathname), '..', 'scripts', 'install.mjs'), path.join(root, 'scripts', 'install.mjs'));
+  fs.mkdirSync(path.join(root, 'agent'));
+  fs.writeFileSync(path.join(root, 'agent', 'a.md'), 'checkout\n');
+  fs.mkdirSync(path.join(root, 'target'));
+  const run = (...args) => spawnSync(process.execPath, [path.join(root, 'scripts', 'install.mjs'), '--target', path.join(root, 'target'), ...args], { encoding: 'utf8' });
+  return { root, run };
+}
+
+test('the command line: --check writes nothing, --check with --pull is refused, an unknown option is refused', () => {
+  const { root, run } = cli();
+  let r = run('--check');
+  assert.equal(r.status, 0);
+  assert.match(r.stdout, /add +a\.md[\s\S]*1 change\(s\) would be installed\./);
+  assert.deepEqual(fs.readdirSync(path.join(root, 'target')), [], 'nothing written');
+  r = run();
+  assert.equal(r.status, 0);
+  fs.writeFileSync(path.join(root, 'target', 'a.md'), 'live\n');
+  r = run('--check', '--pull', 'a.md');
+  assert.equal(r.status, 2);
+  assert.match(r.stderr, /--check writes nothing, but --pull copies installed files into the checkout: use one or the other/);
+  assert.equal(fs.readFileSync(path.join(root, 'agent', 'a.md'), 'utf8'), 'checkout\n', 'the checkout is unchanged');
+  r = run('--pull', 'a.md');
+  assert.equal(r.status, 0);
+  assert.equal(fs.readFileSync(path.join(root, 'agent', 'a.md'), 'utf8'), 'live\n');
+  assert.equal(run('--chek').status, 2);
 });
