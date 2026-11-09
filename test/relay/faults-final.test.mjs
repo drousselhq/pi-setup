@@ -12,7 +12,7 @@ test('kill sweep: a prerequisite slice chosen during the final verification', { 
     worker(c, { p }) {
       const decided = fs.existsSync(p.file('decisions.md')) && /^## D1 /m.test(p.read('decisions.md'));
       if (c.role === 'implementer' && c.slice === 'FINAL') {
-        if (decided) return c.write(done('verified'));
+        if (decided) return c.write(done('verified', { verification: 'pass' }));
         return c.write({ status: 'needs-decision', summary: 'a choice', question: 'Add a fixture first?', options: [{ label: 'Add it first', consequence: 'p' }, { label: 'Go on', consequence: 'g' }], recommended: 1, reason: 'r' });
       }
       if (c.role === 'implementer' || c.role === 'senior') {

@@ -34,7 +34,7 @@ function arm(p, h, k, mode) {
   const base = h.io();
   h.ioExtra = {
     herdr: (a) => { alive(); return h.handle(a); },
-    git: (a, cwd) => { alive(); return base.git(a, cwd); },
+    git: (a, cwd, env) => { alive(); return base.git(a, cwd, env); },
     sleep: (ms) => { alive(); return base.sleep(ms); },
     notify: (...x) => { alive(); return base.notify(...x); },
     write: (t) => { alive(); return base.write(t); },

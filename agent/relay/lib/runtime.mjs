@@ -50,8 +50,8 @@ export function herdr(args, { allowFail = false } = {}) {
   throw new Error(`herdr ${args.slice(0, 2).join(' ')} failed: ${error.code}: ${error.message}`);
 }
 
-export function git(args) {
-  const r = io.git(args, ctx.project);
+export function git(args, env) {
+  const r = io.git(args, ctx.project, env);
   return r.status === 0 ? r.stdout.trim() : null;
 }
 

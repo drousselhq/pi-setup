@@ -11,7 +11,7 @@ function run(cmd, args, opts = {}) {
 
 export const realIo = {
   herdr: (args) => run('herdr', args),
-  git: (args, cwd) => run('git', args, { cwd }),
+  git: (args, cwd, env) => run('git', args, { cwd, ...(env ? { env: { ...process.env, ...env } } : {}) }),
   sleep: (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms),
   notify: (title, body) => run('osascript', ['-e', `display notification ${JSON.stringify(body)} with title ${JSON.stringify(title)}`]),
   write: (text) => process.stdout.write(text),

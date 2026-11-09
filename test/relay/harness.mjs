@@ -101,7 +101,7 @@ export class FakeHerdr {
     const pid = ++this.pidSeq;
     return {
       herdr: (args) => this.handle(args),
-      git: (args, cwd) => spawnSync('git', args, { cwd, encoding: 'utf8' }),
+      git: (args, cwd, env) => spawnSync('git', args, { cwd, encoding: 'utf8', ...(env ? { env: { ...process.env, ...env } } : {}) }),
       sleep: () => {
         // A relay waiting with nothing scheduled would wait forever: fail the test instead of hanging it.
         if (++this.idleSleeps > 200) throw new Error('harness: the relay is waiting for something that will never happen');
@@ -202,6 +202,8 @@ export function writeResult(file, obj, { after } = {}) {
 }
 
 export const done = (summary = 'done', extra = {}) => ({ status: 'done', summary, checks: ['fake → pass'], ...extra });
+// done() for an implementer in any slice: in FINAL it also reports the full verification passed.
+export const finished = (c, summary = 'done') => done(summary, c.slice === 'FINAL' ? { verification: 'pass' } : {});
 export const accept = () => done('accepted', { verdict: 'accept', blocking: [] });
 export const changes = (...blocking) => done('changes required', { verdict: 'changes-required', blocking });
 export const brief = (extra = {}) => ({
@@ -214,12 +216,12 @@ export const decision = (extra = {}) => ({
 });
 
 // The usual worker behaviour: implementers commit <slice>.txt and finish, reviewers accept, the final
-// step finds nothing to do. Tests override what they care about and fall back to this.
+// step finds nothing to do and reports its verification passed. Tests override what they care about and fall back to this.
 export function standard(c) {
   if (c.role === 'reviewer') return c.write(accept());
   if (c.role === 'implementer' || c.role === 'senior') {
     if (c.slice !== 'FINAL') c.p.commit(`${c.slice.toLowerCase()}-${c.role}-${c.n}.txt`);
-    return c.write(done(`${c.slice} done`));
+    return c.write(finished(c, `${c.slice} done`));
   }
   if (c.role === 'scout' || c.role === 'architect') return c.write(done(`${c.role} answered`));
   throw new Error(`no standard behaviour for ${c.role} in ${c.slice}`);

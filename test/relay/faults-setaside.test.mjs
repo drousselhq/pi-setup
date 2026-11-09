@@ -2,7 +2,7 @@
 import fs from 'node:fs';
 import { test } from 'node:test';
 import { sweep } from './faults.mjs';
-import { brief, decision, done, standard } from './harness.mjs';
+import { brief, decision, done, finished, standard } from './harness.mjs';
 
 test('kill sweep: a prerequisite slice chosen for an untouched slice, which is set aside and resumes', { timeout: 600_000 }, () => {
   const ref = sweep({
@@ -14,7 +14,7 @@ test('kill sweep: a prerequisite slice chosen for an untouched slice, which is s
       if (c.role === 'implementer' && c.slice === 'S2' && !decided('D1')) return ask();
       if (c.role === 'implementer' || c.role === 'senior') {
         if (!fs.existsSync(`${p.project}/${c.slice}.txt`)) p.commit(`${c.slice}.txt`);
-        return c.write(done());
+        return c.write(finished(c));
       }
       if (c.role === 'advisor') {
         c.write(brief());

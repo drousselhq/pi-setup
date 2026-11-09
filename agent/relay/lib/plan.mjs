@@ -134,6 +134,7 @@ export const FINAL_SLICE = {
   needs: [],
   body: 'Run the project\'s required full verification on the current candidate (all slices). '
     + 'Fix failures that belong to this work, within its accepted scope. Do not start new features. '
+    + 'Report the outcome in "verification": "pass" only if the full verification passed on the candidate as you leave it, else "fail". '
     + 'Weakening a verification gate (anything that makes it check less than before: a looser threshold, limit, tolerance '
     + 'or coverage floor; code, tests or cases excluded, removed or moved out of its reach or to a weaker level; a check '
     + 'skipped, made optional or replaced with a weaker one) that the handoff, a slice or a decision does not authorise needs '

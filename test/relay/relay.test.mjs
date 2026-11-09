@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { test } from 'node:test';
 import {
-  FakeHerdr, StopRelay, TOPIC, accept, brief, changes, decision, done, makeProject, standard, writeResult,
+  FakeHerdr, StopRelay, TOPIC, accept, brief, changes, decision, done, finished, makeProject, standard, writeResult,
 } from './harness.mjs';
 
 const roles = (h) => h.prompts.map((c) => `${c.slice}:${c.role}`);
@@ -277,7 +277,7 @@ for (const [kind, file] of [['an already modified', 'README.md'], ['an untracked
     const h = new FakeHerdr(p, (c) => {
       if (c.role === 'implementer' && c.slice === 'S1') touch(p, file, 'S1\n');
       if (c.role === 'implementer' && c.slice === 'FINAL') touch(p, file, 'final fix\n');
-      if (c.role === 'implementer') return c.write(done());
+      if (c.role === 'implementer') return c.write(finished(c));
       return standard(c);
     });
     assert.equal(h.run(), 0);
@@ -290,7 +290,7 @@ test('without commits, a final step that deletes an already modified file is rev
   const h = new FakeHerdr(p, (c) => {
     if (c.role === 'implementer' && c.slice === 'S1') touch(p, 'README.md', 'S1\n');
     if (c.role === 'implementer' && c.slice === 'FINAL') fs.rmSync(`${p.project}/README.md`);
-    if (c.role === 'implementer') return c.write(done());
+    if (c.role === 'implementer') return c.write(finished(c));
     return standard(c);
   });
   assert.equal(h.run(), 0);
@@ -302,7 +302,7 @@ test('without commits, a final step that changes nothing is not reviewed, even w
   fs.writeFileSync(`${p.project}/.git/info/exclude`, ''); // .agents_work/ shows up as untracked
   const h = new FakeHerdr(p, (c) => {
     if (c.role === 'implementer' && c.slice === 'S1') touch(p, 'README.md', 'S1\n');
-    if (c.role === 'implementer') return c.write(done());
+    if (c.role === 'implementer') return c.write(finished(c));
     return standard(c);
   });
   assert.equal(h.run(), 0);

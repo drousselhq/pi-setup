@@ -119,6 +119,15 @@ the terminal.
 - **Stops (exit code 2):** a repair-cycle limit, the scout/architect request limit, or a missing
   plan. Read the message in `relay/log.md`, adjust `plan.md`/`handoff.md` if needed, then run `pi-relay <topic>` again.
   Re-running after a limit stop allows that many more cycles or requests.
+- **The final verification** runs the project's full verification on the whole candidate. Its worker reports
+  `verification: pass | fail` on every result. The relay announces completion only on a pass it saw in the
+  current run, for the files as they are when it finishes (their content, so committing verified work changes
+  nothing). A failing verification stops the relay (exit 2): fix the cause or decide, then re-run, and the same
+  worker verifies again. A pass read after a restart, or files changed after the pass (a reviewer that edited,
+  say), get one more verification; changed again, the relay stops naming the files. A slice added to the plan
+  after the final verification runs, and the final verification runs again after it. A completed topic run
+  again with the files unchanged reports completion as before; after other changes it says which state its
+  verification covered and starts nothing.
 - **A prerequisite slice:** a worker that finds distinct work must come first asks `needs-decision` with an
   option proposing a slice. If you choose it in the advisor's brief, the relay inserts the slice into `plan.md`
   before the current one (next free id, e.g. `S2b`), sets the current slice aside, runs the new slice, then
@@ -159,7 +168,7 @@ One JSON object per line. Every event has `t`, `run` (one ID per relay process),
 | `slice_set_aside` / `slice_resumed` | slice, before, restart (true when the final verification starts again after the slice) / before, base |
 | `agent_start` | role, agent, model, thinking, session (Pi session file), tab, resumedSession |
 | `agent_start_recovered` | role, agent, tab (a worker whose start was interrupted, closed before starting anew) |
-| `step_sent` / `step_result` | role, purpose / status, verdict, blocking, summary, question, checks, durationMs, usage |
+| `step_sent` / `step_result` | role, purpose / status, verdict, blocking, summary, question, verification, checks, durationMs, usage |
 | `operator_wait_start` / `operator_wait_end` | role, status, question / waitedMs |
 | `permission_wait` | role, waitedMs |
 | `advisor_start`, `advisor_brief` | workerRole, question / title, options, recommended |
@@ -169,7 +178,9 @@ One JSON object per line. Every event has `t`, `run` (one ID per relay process),
 | `fresh_session` | role, purpose, setAside, note (`--fresh`) |
 | `acceptance_recorded`, `acceptance_compared` | tests, snapshot / changed, missing (acceptance files, before each review) |
 | `quota_reading`, `quota_pause`, `quota_pause_end` | fiveHour, sevenDay / until, reason / waitedMs |
-| `run_complete` / `run_stop` | head / reason, kind |
+| `run_complete` / `run_stop` | head, verification (`pass`) / reason, kind |
+| `run_already_complete` | current (false: the files changed since the final verification), head |
+| `final_invalidated` | slice (added after the final verification, which runs again) |
 
 `usage` comes from the worker's Pi session for that step: turns, input, output, cacheRead, cacheWrite,
 reasoning, costUsd and compactions. The full transcripts stay in the Pi session files listed in `agent_start`.
@@ -212,7 +223,7 @@ The relay counts the `Acceptance:` bullets. Slice IDs (`S1`, `S2`, `S2a`…) mus
 
 `verdict` and `blocking` are for the reviewer only (`accept` lists no blocking finding, `changes-required` at
 least one; a contradiction is an invalid result: one reminder naming it, then you), `tests` for the acceptance
-worker only. Allowed statuses differ by role (see the assignment).
+worker only, `verification` (`pass | fail`) for the implementer or senior in the final verification only. Allowed statuses differ by role (see the assignment).
 
 ### Acceptance tests before the code
 

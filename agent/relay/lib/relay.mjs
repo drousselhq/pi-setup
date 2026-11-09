@@ -2,7 +2,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { sliceBaseline } from './changes.mjs';
+import { candidateTree, sliceBaseline } from './changes.mjs';
 import { C, callout, compactionText, emit, heading, log, out, purposeLabel, resetConsole, ROLE_COLOR, roleTag, setTTY, shortModel } from './console.mjs';
 import { closeTabs } from './agents.mjs';
 import { checkCouncilConfig } from './council.mjs';
@@ -20,6 +20,11 @@ import { sessionCache } from './usage.mjs';
 export function runSlice(slice) {
   if (!state.cur && state.setAsideSlices?.[slice.id]) resumeSetAside(slice);
   if (!state.cur) {
+    if (state.slices.FINAL && slice.id !== 'FINAL') { // new work after the final verification: it must run again
+      delete state.slices.FINAL;
+      emit('final_invalidated', { slice: slice.id });
+      log(`${slice.id} added after the final verification: it will run again`, { quiet: true });
+    }
     state.cur = {
       slice: slice.id, ...sliceBaseline(),
       cycle: 0, help: 0, agents: {}, assignments: {}, pending: null, queued: null, prep: [], findings: [],
@@ -129,6 +134,7 @@ export function main(args) {
   checkCouncilConfig();
   ctx.workspace = herdr(['pane', 'current', '--current']).pane.workspace_id;
   acquireLock();
+  ctx.runStartedAt = Date.now(); // a result written before this is not a final verification this run saw
   loadState(); // what the previous relay left, read under the lock; nothing is written from the earlier read
   closeTabs(); // tabs a killed run released but did not close
   save();
@@ -144,14 +150,37 @@ export function main(args) {
   if (state.cur?.slice !== 'PLAN') checkPlan();
   if (opts.fresh) replaceWorker(opts.fresh, opts.note);
   setAsideForEarlierSlice();
-  for (let slice = state.cur ? currentSlice() : nextSlice(); slice; slice = nextSlice()) runSlice(slice);
-  emit('run_complete', { head: git(['rev-parse', 'HEAD']) });
-  log('relay complete: all slices and final verification done', { quiet: true });
+  let ran = false;
+  for (let slice = state.cur ? currentSlice() : nextSlice(); slice; slice = nextSlice()) { ran = true; runSlice(slice); }
+  if (!ran && !currentCandidate()) return alreadyComplete();
+  emit('run_complete', { head: git(['rev-parse', 'HEAD']), verification: 'pass' });
+  log('relay complete: all slices done; the final verification passed', { quiet: true });
   const council = (state.councilDecisions ?? []).map((d) => `  ${d.id} (${d.slice}): ${d.title}`);
-  callout(C.green, `Relay ${ctx.topic} complete`, ['All slices and the final verification are done.',
+  callout(C.green, `Relay ${ctx.topic} complete`, ['All slices are done and the final verification passed.',
     ...(council.length ? [`Decided by the advisory council (in ${path.relative(ctx.project, ctx.decisions)}; yours to overrule):`, ...council] : []),
     C.dim(`History: ${path.relative(ctx.project, ctx.logFile)}`)]);
-  notify(`Relay ${ctx.topic} complete`, 'All slices and final verification are done.');
+  notify(`Relay ${ctx.topic} complete`, 'All slices are done and the final verification passed.');
+  return 0;
+}
+
+// Whether the final verification on record covers the files as they are now (a topic run again after it ended).
+const currentCandidate = () => Boolean(state.slices.FINAL?.tree) && state.slices.FINAL.tree === candidateTree();
+
+// A completed topic run again after its files changed: its verification covered an earlier state, so the relay
+// does not announce completion for the current one, and starts nothing.
+function alreadyComplete() {
+  const f = state.slices.FINAL;
+  if (f.tree && candidateTree() === null) {
+    throw new RelayStop('The relay could not read the checkout\'s files through Git to compare them with the final verification. Check Git, then re-run.');
+  }
+  const when = f.finishedAt ? `${String(f.finishedAt).slice(0, 16).replace('T', ' ')} UTC` : 'an earlier run';
+  emit('run_already_complete', { current: false, head: f.head ?? null });
+  log(`already complete; the checkout changed since the final verification of ${when}`, { quiet: true });
+  callout(C.yellow, `Relay ${ctx.topic}: already complete, for an earlier state`, [
+    `The final verification of this topic covered the state of ${when}${f.head ? ` (${String(f.head).slice(0, 7)})` : ''}; `
+      + 'the checkout has changed since, so it does not cover the current state.',
+    `To verify the current state, add a slice to ${path.relative(ctx.project, ctx.plan)} (the final verification runs again after it), or start a new topic.`,
+  ]);
   return 0;
 }
 

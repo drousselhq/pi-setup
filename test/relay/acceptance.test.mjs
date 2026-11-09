@@ -16,7 +16,7 @@ const TESTS = ['tests/accept_a.txt', 'tests/accept_b.txt'];
 const writeTests = (c) => { for (const t of TESTS) write(c.p, t); return c.write(done('tests written', { tests: TESTS })); };
 // Implementers commit their slice file plus any acceptance tests, as their assignment asks.
 const commitWork = (c) => {
-  if (c.slice === 'FINAL') return c.write(done());
+  if (c.slice === 'FINAL') return c.write(done('verified', { verification: 'pass' }));
   const extra = c.slice === 'S2' ? TESTS.filter((t) => fs.existsSync(path.join(c.p.project, t))) : [];
   write(c.p, `${c.slice}.txt`);
   c.p.git('add', `${c.slice}.txt`, ...extra);
@@ -59,7 +59,7 @@ test('without commits, changed and missing acceptance files are reported in ever
     if (c.role === 'acceptance') return writeTests(c);
     if (c.role === 'implementer' && c.slice === 'S2' && c.n === 1) { write(p, TESTS[0], 'weakened\n'); write(p, 'S2.txt'); return c.write(done()); }
     if (c.role === 'implementer' && c.slice === 'S2') { fs.rmSync(path.join(p.project, TESTS[1])); return c.write(done()); }
-    if (c.role === 'implementer') { if (c.slice !== 'FINAL') write(p, `${c.slice}.txt`); return c.write(done()); }
+    if (c.role === 'implementer') { if (c.slice !== 'FINAL') write(p, `${c.slice}.txt`); return c.write(done('done', c.slice === 'FINAL' ? { verification: 'pass' } : {})); }
     if (c.role === 'reviewer' && c.slice === 'S2' && c.n === 1) return c.write(done('no', { verdict: 'changes-required', blocking: ['R1'] }));
     return standard(c);
   });

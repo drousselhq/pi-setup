@@ -3,7 +3,7 @@
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import { ctx, git, state } from './runtime.mjs';
+import { ctx, git, io, state } from './runtime.mjs';
 
 // Whether a slice changed anything is decided by content, not by `git status`: with commit: false a
 // file that is already modified stays " M file" however often it changes. The fingerprint covers HEAD,
@@ -58,4 +58,39 @@ export function sliceChanged() {
   if (git(['rev-parse', 'HEAD']) !== c.base) return true;
   if (c.baseContent !== undefined) return workFingerprint() !== c.baseContent;
   return (git(['status', '--porcelain']) ?? '') !== (c.baseStatus ?? ''); // a slice started by an older relay
+}
+
+// The candidate as content, for the final verification: the Git tree of the working tree's tracked and untracked,
+// non-ignored files outside .agents_work/ (taken out explicitly: projects need not ignore it), built in a temporary
+// copy of the index (unchanged files are not read again; flags that make Git skip a file's content, assume-
+// unchanged and skip-worktree, are cleared in the copy). Committing verified content leaves it unchanged; any
+// content change alters it. Null when Git cannot build it.
+export function candidateTree() {
+  // In .git, outside the working tree (adding the working tree never takes the index file itself), one per process.
+  const temp = git(['rev-parse', '--git-path', `pi-relay-candidate-${io.pid}.index`]);
+  const real = git(['rev-parse', '--git-path', 'index']);
+  if (temp === null) return null;
+  const index = path.resolve(ctx.project, temp);
+  try {
+    const realIndex = real === null ? null : path.resolve(ctx.project, real);
+    if (realIndex && fs.existsSync(realIndex)) fs.copyFileSync(realIndex, index);
+    else fs.rmSync(index, { force: true });
+    const env = { GIT_INDEX_FILE: index };
+    const listed = git(['ls-files', '-v', '-z'], env);
+    if (listed === null) return null;
+    const flagged = listed.split('\0').filter((e) => /^[a-zS] /.test(e)).map((e) => e.slice(2));
+    // One flag per command: given both, Git clears only assume-unchanged.
+    for (const flag of ['--no-assume-unchanged', '--no-skip-worktree']) {
+      for (let i = 0; i < flagged.length; i += 200) {
+        if (git(['update-index', flag, '--', ...flagged.slice(i, i + 200)], env) === null) return null;
+      }
+    }
+    // .agents_work/ is taken out of the temporary index rather than excluded by pathspec: Git refuses a pathspec
+    // that names an ignored path, and projects may or may not ignore it.
+    if (git(['add', '-A'], env) === null) return null;
+    if (git(['rm', '-r', '-q', '--cached', '--ignore-unmatch', '--', '.agents_work'], env) === null) return null;
+    return git(['write-tree'], env);
+  } finally {
+    fs.rmSync(index, { force: true });
+  }
 }

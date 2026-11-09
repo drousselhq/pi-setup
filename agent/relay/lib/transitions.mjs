@@ -2,10 +2,10 @@
 
 import { acceptanceStep, implementerNote, PREP_ORDER, recordAcceptance, reviewerNote } from './acceptance.mjs';
 import { releaseAgent, releaseAll } from './agents.mjs';
-import { sliceChanged } from './changes.mjs';
+import { candidateTree, sliceChanged } from './changes.mjs';
 import { C, compactionText, emit, event, fmtDuration, GUTTER, log, out, resultIcon, resultLabel, roleTag, shortModel } from './console.mjs';
 import { checkPlan, FINAL_SLICE, parsePlan, PLAN_FORMAT, PLAN_SLICE, progress, progressText } from './plan.mjs';
-import { cfg, ctx, git, HELP_STATUSES, now, plural, RelayStop, state } from './runtime.mjs';
+import { cfg, ctx, git, HELP_STATUSES, now, plural, RelayStop, RUN_ID, state } from './runtime.mjs';
 import { artifactPath, queue } from './steps.mjs';
 import { save } from './store.mjs';
 import { stepUsage } from './usage.mjs';
@@ -157,6 +157,7 @@ function applyResult(c, p, r) {
   emit('step_result', {
     role: p.role, purpose: p.purpose, status: r.status, verdict: r.verdict ?? null,
     blocking: Array.isArray(r.blocking) ? r.blocking : null, summary: r.summary ?? null, question: r.question ?? null,
+    verification: r.verification ?? null,
     checks: r.checks ?? null, durationMs: Date.now() - (p.firstSentAt ?? p.sentAt),
     usage,
   });
@@ -211,12 +212,13 @@ function applyResult(c, p, r) {
   }
 
   if (p.role === 'implementer' || p.role === 'senior') {
-    if (slice.id === 'FINAL' && !c.reviewed && !sliceChanged()) return finishSlice();
+    if (slice.id === 'FINAL') return finalResult(c, p, r);
     return queue(reviewMessage());
   }
 
   if (p.role === 'reviewer') {
     c.reviewed = true;
+    if (r.verdict === 'accept' && slice.id === 'FINAL') return finishFinal(c, (c.acceptedTree = candidateTree()));
     if (r.verdict === 'accept') return finishSlice();
     const blocking = Array.isArray(r.blocking) ? r.blocking : [];
     const again = blocking.filter((id) => (c.findings ?? []).includes(id));
@@ -225,7 +227,8 @@ function applyResult(c, p, r) {
     const repair = {
       purpose: `repair${c.cycle}`,
       text: `Review loop ${c.cycle}: fix the blocking findings ${c.findings.join(', ') || '(see review)'} in ${r.artifact ?? artifactPath('reviewer', slice.id)}. `
-        + 'Verify each one first; if you disagree, explain with evidence in your artifact instead of changing code. Run focused checks.',
+        + 'Verify each one first; if you disagree, explain with evidence in your artifact instead of changing code. '
+        + (slice.id === 'FINAL' ? 'Then run the project\'s full verification again and report it in "verification".' : 'Run focused checks.'),
     };
     const e = escalationCfg();
     if (e && !c.senior && (c.cycle >= (e.afterLoops ?? 2) || (e.onRecurringFinding !== false && again.length))) {
@@ -242,15 +245,56 @@ function applyResult(c, p, r) {
   }
 }
 
-// Records the slice as done; its workers are released (runSlice() closes their tabs after saving).
-export function finishSlice() {
+// ---------- the final verification ----------
+// It ends only on a pass the relay saw in this run, for the candidate as it is now (candidateTree()): a pass
+// read after a restart, or a candidate changed after the pass, gets one more verification; a change after that
+// stops the relay. A failing verification stops it, with the retry queued in the same session.
+
+function finalResult(c, p, r) {
+  if (r.verification === 'fail') {
+    queue({
+      role: p.role, purpose: p.purpose, initial: false,
+      text: `Your full verification failed (${r.summary ?? 'see your record'}). The owner may have fixed the cause or decided something `
+        + 'meanwhile: check decisions.md, fix what belongs to this work within its accepted scope, run the project\'s full verification '
+        + 'again on the current candidate and report it in "verification".',
+    });
+    throw new RelayStop(`FINAL: the final verification failed: ${r.summary ?? 'see the record'}. Read ${artifactPath(p.role, 'FINAL')}; `
+      + `fix the cause or decide what to do, then re-run pi-relay ${ctx.topic}: the same worker runs the full verification again.`);
+  }
+  const tree = candidateTree();
+  // Seen in this run: evidence for these files, in this run only (a restart needs a new verification).
+  c.verified = r._mtime >= ctx.runStartedAt && tree ? { tree, run: RUN_ID } : null;
+  const unreviewed = c.reviewed ? c.acceptedTree !== tree : sliceChanged();
+  return unreviewed ? queue(reviewMessage()) : finishFinal(c, tree);
+}
+
+function finishFinal(c, tree) {
+  const seen = c.verified?.run === RUN_ID ? c.verified : null;
+  if (tree && seen?.tree === tree) return finishSlice({ tree });
+  const changed = seen && tree ? git(['diff', '--name-only', seen.tree, tree]) : null;
+  const why = !tree ? 'the relay could not read the candidate\'s files through Git'
+    : changed ? `the candidate changed after the last full verification (${changed.split('\n').join(', ')})`
+      : 'the relay did not see the last full verification finish in this run, so it is not evidence for the current files';
+  const step = {
+    role: implRole(), purpose: 'verify', initial: false,
+    text: `Run the project's full verification again on the current candidate: ${why}. Report it in "verification".`,
+  };
+  if (!c.reverified) { c.reverified = true; return queue(step); }
+  queue(step); // re-running verifies again
+  throw new RelayStop(`FINAL: ${why}, again after one more verification. Find out what changes the files during the final `
+    + `verification, then re-run pi-relay ${ctx.topic}: the same worker verifies again.`);
+}
+
+// Records the slice as done (FINAL with the verified candidate); its workers are released (runSlice() closes
+// their tabs after saving).
+export function finishSlice(extra = {}) {
   const c = state.cur;
   releaseAll();
   const head = git(['rev-parse', 'HEAD']);
   const commits = c.base && head && head !== c.base ? git(['log', '--format=%h %s', `${c.base}..HEAD`]) : '';
   state.slices[c.slice] = {
     status: 'done', base: c.base, head, cycles: c.cycle, compactions: c.compactions ?? 0,
-    escalated: c.senior ? c.escalation : null, finishedAt: now(),
+    escalated: c.senior ? c.escalation : null, finishedAt: now(), ...extra,
   };
   log(`${c.slice} done${commits ? `; commits:\n    ${commits.split('\n').join('\n    ')}` : ''}`, { quiet: true });
   const n = commits ? commits.split('\n').length : 0;

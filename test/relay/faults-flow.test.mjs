@@ -18,7 +18,7 @@ test('kill sweep: planner, scout question, review loop, escalation, final verifi
       if (c.role === 'planner') { fs.writeFileSync(p.file('plan.md'), ONE); return c.write(done('planned')); }
       if (c.role === 'scout') { fs.writeFileSync(p.file('slices/S1/scout.md'), 'facts\n'); return c.write(done('answered')); }
       if (c.role === 'reviewer') return c.write(fixes() >= 2 ? accept() : changes('R1'));
-      if (c.slice === 'FINAL') return c.write(done('verified'));
+      if (c.slice === 'FINAL') return c.write(done('verified', { verification: 'pass' }));
       if (!fs.existsSync(p.file('slices/S1/scout.md'))) return c.write({ status: 'needs-scout', summary: 'lost', question: 'Where is X?' });
       if (!has('s1.txt')) p.commit('s1.txt');
       if (/fix the blocking findings/.test(c.text) && fixes() < 3) p.commit(`fix-${fixes() + 1}.txt`);

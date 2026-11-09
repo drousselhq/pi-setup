@@ -1,4 +1,5 @@
-// Kill sweep (faults.mjs) over a compaction-limit stop: the retry by a plain re-run, and by --fresh.
+// Kill sweep (faults.mjs) over stops: a compaction-limit stop retried by a plain re-run and by --fresh, and a
+// failing final verification retried after the owner fixed the cause.
 import fs from 'node:fs';
 import { test } from 'node:test';
 import { sweep } from './faults.mjs';
@@ -26,4 +27,19 @@ test('kill sweep: a compaction-limit stop retried by a plain re-run', { timeout:
 
 test('kill sweep: a compaction-limit stop retried with --fresh', { timeout: 600_000 }, () => {
   sweep({ name: 'stop-fresh', plan: ONE, config: { escalation: { enabled: false } }, worker, afterStop: [TOPIC, '--fresh', 'reviewer', '--note', 'Start over.'] });
+});
+
+test('kill sweep: a failing final verification retried after a re-run', { timeout: 600_000 }, () => {
+  sweep({
+    name: 'final-fail',
+    plan: ONE,
+    worker(c, { p }) {
+      const marker = `${p.root}/final-failed-once`;
+      if (c.role === 'implementer' && c.slice === 'FINAL') {
+        if (!fs.existsSync(marker)) { fs.writeFileSync(marker, ''); return c.write({ status: 'done', summary: '2 tests fail', verification: 'fail', checks: ['npm test → fail'] }); }
+        return c.write({ status: 'done', summary: 'verified', verification: 'pass', checks: ['npm test → pass'] });
+      }
+      return c.role === 'reviewer' ? standard(c) : worker(c, { p }); // an ordinary reviewer here
+    },
+  });
 });

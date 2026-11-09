@@ -54,7 +54,9 @@ export function writeAssignment(role, purpose, slice, task) {
     : '';
   const testFields = role === 'acceptance'
     ? '\n  "tests": ["path/of/a/new/file"],          // with status done: every file you created, relative to the project checkout'
-    : '';
+    : (role === 'implementer' || role === 'senior') && slice.id === 'FINAL'
+      ? '\n  "verification": "pass | fail",           // with status done: the project\'s full verification on the candidate as you leave it'
+      : '';
   const questionFields = role === 'advisor' ? '' : '\n  "options": [{ "label": "...", "consequence": "..." }],  // with needs-decision: 2-4 real options'
     + '\n             // an option may propose a prerequisite slice: add "slice": { "title": "...", "acceptance": ["..."], "notes": "..." }'
     + '\n  "recommended": 1, "reason": "why you recommend it",   // with needs-decision';
@@ -161,6 +163,10 @@ export function resultProblem(role, r) {
     }
   }
   if (role === 'acceptance' && r.status === 'done') return acceptanceProblem(r);
+  if ((role === 'implementer' || role === 'senior') && r.status === 'done' && state.cur?.slice === 'FINAL'
+    && !['pass', 'fail'].includes(r.verification)) {
+    return '"verification" must be "pass" or "fail": the outcome of the project\'s full verification on the candidate as you leave it';
+  }
   return null;
 }
 
