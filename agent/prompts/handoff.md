@@ -23,6 +23,12 @@ Capture only what the work needs:
   current branch and unfinished edits if known.
 - **Authority:** whether workers may commit locally (default yes, never push), and any limits on
   models, spending, dependencies, external systems or data.
+- **Standing permissions:** where the project's instructions reserve kinds of decisions to me and this
+  work is likely to raise routine cases of them again and again (for example registering new code under
+  the existing coverage floors, or keeping the same requirements across a path change), ask me once
+  whether to pre-approve those kinds for this topic, naming each and its limits, and record my answer
+  in Authority as I gave it. Nothing is pre-approved unless I say so; anything that lowers a check or
+  changes what acceptance requires stays mine.
 - **What the project's instructions require of a handoff,** if they say (for example a decision-routing
   section).
 

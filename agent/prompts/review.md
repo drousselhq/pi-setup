@@ -79,9 +79,11 @@ A finding is **blocking** only if it violates the acceptance, the handoff or a p
 or has a concrete, credible material consequence. A missing test is blocking when project
 coverage/regression rules require it. Such a violation is blocking however small or harmless it
 looks: severity describes its impact, it does not make the violation optional. A change outside the
-listed paths is blocking even when it is necessary, unless an explicit owner permission you can cite
-authorises it (in relay mode `decisions.md`, the handoff or the slice; otherwise the handoff or the
-request you were given): the remedy
+listed paths is blocking even when it is necessary, unless authority you can cite allows it. That is
+the owner's (in relay mode `decisions.md`, the handoff or the slice; otherwise the handoff or the
+request you were given) or a decision of the relay's advisory council recorded in `decisions.md`;
+where the project's rules or the handoff reserve that kind of change to the owner, only the owner's
+counts. The remedy
 is that authority, not the reviewer's acceptance. Everything else (style, optional hardening,
 hypothetical infrastructure, advisory performance) is **non-blocking**. Record those but never list
 them as blocking.

@@ -86,7 +86,7 @@ the result file, then stop. Do not launch other agents and do not start another 
 - Handoff (agreed intent, scope, acceptance, authority): ${fs.existsSync(ctx.handoff) ? ctx.handoff : '(none)'}
 - Plan: ${fs.existsSync(ctx.plan) ? ctx.plan : '(not written yet)'}
 - Slice base commit: ${state.cur.base ?? '(none)'}
-- Decisions so far (the owner's, and the advisory council's where enabled): ${ctx.decisions}${fs.existsSync(ctx.decisions) ? '' : ' (none yet)'}.
+- Decisions so far (the owner's, and the advisory council's where enabled; written by the relay, never edit it): ${ctx.decisions}${fs.existsSync(ctx.decisions) ? '' : ' (none yet)'}.
   Read it before you start; never ask again about something it already settles.
 - Your artifact: ${artifactPath(role, slice.id)}
 ${others.length ? `- Other artifacts for this slice: ${others.join(', ')}\n` : ''}
@@ -103,7 +103,7 @@ ${task}
 
 ## Rules
 - ${gitRules(role)}
-- Do not change ticket/tracker status. Put proposed tracker updates in your artifact.
+- Do not change ticket/tracker status. Put proposed tracker updates in your artifact.${role === 'advisor' ? '' : compactionRule()}
 - Stay within the handoff's scope and the slice's acceptance. Optional improvements go in your
   artifact as suggestions; they are not work for this run.
 - Ask only when you genuinely cannot proceed, or when a materially better approach needs authority you lack.
@@ -130,6 +130,13 @@ Allowed statuses for your role: ${statuses}.
   fs.writeFileSync(file, body);
   save();
   return file;
+}
+
+// The compaction limit, so a worker can see a step growing too large before the relay interrupts it.
+function compactionRule() {
+  const limit = cfg.maxCompactionsPerStep ?? 3;
+  return limit > 0 ? `\n- The relay interrupts a step whose session compacts ${limit === 1 ? 'once' : `${limit} times`}. A step that large `
+    + 'belongs in its own slice: if yours is heading there, say so (`needs-decision`) instead of pushing on.' : '';
 }
 
 export function resultPathFor(role, purpose) {

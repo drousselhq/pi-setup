@@ -5,7 +5,7 @@ argument-hint: "[candidate (commit range, branch or paths), context, high-risk a
 # Deep review of a change set
 
 Assess in depth whether the specified change set is correct, legible and maintainable enough to
-build on. Correctness, maintainability, legibility and test design carry equal weight.
+build on. Correctness comes first; maintainability, legibility and test design follow, and each counts.
 Do not modify product code, tests, documentation or configuration. Use the `agent-work` skill's
 rules for the topic folder and existing artifacts.
 

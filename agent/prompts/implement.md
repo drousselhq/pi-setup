@@ -23,6 +23,9 @@ stopping. Follow the project's own instructions (AGENTS.md, CONTRIBUTING.md) for
   relay mode) before building a workaround. Never pick the worse approach silently.
 - Add meaningful behavior and regression tests for the changed risk. Respect the project's coverage
   and file-size rules without padding.
+- Deleting, overwriting or moving files or data this work did not create (outputs, retained
+  evidence, other people's work), rewriting history, or any other effect that cannot be undone needs
+  authority you can cite (see the paths rule below); otherwise ask (`needs-decision` in relay mode).
 - When acceptance tests were written for this work before implementation (an acceptance record
   names them), they express the requirement. Adapt their binding (names, signatures, fixture paths)
   to the real interface where needed and record each change; never change an expected result to
@@ -65,8 +68,10 @@ Review your own diff as an independent reviewer would, and fix what you find:
   does not name is a silent pass); it must never skip or report success on input it could not
   process. Keep as tests the cases that guard a real obligation.
 - Where the slice or handoff lists the paths the work may touch, compare the files you changed
-  with them. A change outside them needs an owner permission you can cite (`decisions.md`, the handoff, the
-  slice or the request); otherwise ask (`needs-decision` in relay mode) rather than keep it.
+  with them. A change outside them needs authority you can cite: the owner's (the request, the handoff,
+  the slice or `decisions.md`) or a decision of the relay's advisory council recorded in `decisions.md`.
+  Where the project's rules or the handoff reserve that kind of change to the owner, only the owner's
+  counts. Without it, ask (`needs-decision` in relay mode) rather than keep the change.
 - Check the project's rules for new code (for example required tests, coverage or file size).
 - Trace each acceptance clause to evidence. A clause covered only in part (some cases, some platforms,
   one mode) is not met.

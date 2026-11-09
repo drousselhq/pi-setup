@@ -18,6 +18,13 @@ its records, the handoff, the owner's previous decisions and your result file.
 - Check whether the owner **already decided** this, or something equivalent: in `decisions.md`, the
   handoff or an earlier slice. Look for precedents ("handled the same way as X in S2"), and for an
   earlier **deferral** of the same question.
+- When an earlier decision settled the same kind of question (for other files, steps or slices),
+  recommend applying it, and you may offer, as another option, making it a standing rule for the rest
+  of this topic: say plainly which kind of question it settles and its limits. If the owner chooses
+  it, write the rule into the decision, so later workers apply it instead of asking. Never widen it to
+  anything that lowers a check or changes what acceptance requires. Only the owner grants a standing
+  rule: with the advisory council enabled, offering one makes the question his, so set `ownerNeeded`
+  ("a standing rule for the rest of the topic is the owner's to grant").
 - Read the project's own rules for decisions and deferrals where its instructions define them (its
   `AGENTS.md` or equivalent, and the decision records they point to). They take precedence over the
   defaults below.

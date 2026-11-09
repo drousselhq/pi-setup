@@ -68,3 +68,28 @@ test('a decision that inserts a prerequisite slice names it in its own field, no
   const d = p.events().find((e) => e.type === 'owner_decision');
   assert.deepEqual([d.slice, d.prerequisite, d.chosen], ['S2', 'Make the fixture', 1]);
 });
+
+test('the assignment states the compaction limit (none when it is off) and that decisions.md is the relay\'s', () => {
+  for (const [limit, expected] of [[2, /The relay interrupts a step whose session compacts 2 times\. A step that large belongs in its own slice/], [0, null]]) {
+    const p = makeProject({ plan: ONE, config: { maxCompactionsPerStep: limit } });
+    const h = new FakeHerdr(p, standard);
+    assert.equal(h.run(), 0);
+    const a = h.prompts[0].assignment().replace(/\s+/g, ' ');
+    if (expected) assert.match(a, expected);
+    else assert.doesNotMatch(a, /compacts/);
+    assert.match(a, /written by the relay, never edit it/);
+  }
+});
+
+test('the advisor\'s assignment states no compaction limit: the relay never applies it to the advisor', () => {
+  const p = makeProject({ plan: ONE, config: { maxCompactionsPerStep: 2 } });
+  const h = new FakeHerdr(p, (c) => {
+    if (c.role === 'implementer' && c.slice === 'S1' && c.n === 1) return ask(c);
+    if (c.role === 'advisor') { c.write(brief()); return c.answer(decision()); }
+    return standard(c);
+  });
+  assert.equal(h.run(), 0);
+  const advisor = h.prompts.find((c) => c.role === 'advisor');
+  assert.doesNotMatch(advisor.assignment(), /compacts/);
+  assert.match(h.prompts.find((c) => c.role === 'implementer').assignment().replace(/\s+/g, ' '), /compacts 2 times/);
+});

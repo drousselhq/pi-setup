@@ -287,7 +287,7 @@ For roles, only the fields you set are overridden:
   is interrupted (Escape). An implementer's step is handed to the senior; for the senior or any other role the
   relay stops, and re-running retries the step in a fresh session that continues from the partial work (a
   reviewer's partial record included). To steer that retry, or to have a reviewer start over, re-run with
-  `--fresh <role> --note "..."` instead. `0` disables it.
+  `--fresh <role> --note "..."` instead. `0` disables it. Workers are told the limit in their assignment.
 - `commit: true`: the implementer commits each slice and each repair locally (explicit paths, never pushes).
   The reviewer reviews `base..HEAD`. With `false`, everything stays uncommitted and the reviewer reads the working tree.
 - The script never pushes, never touches trackers and never edits product files.
