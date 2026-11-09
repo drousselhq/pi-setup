@@ -107,11 +107,12 @@ export function setAsideForEarlierSlice() {
 // prerequisite's commits are not this slice's work), and the waiting worker told what was done.
 export function resumeSetAside(slice) {
   const entry = state.setAsideSlices[slice.id];
+  const baseline = sliceBaseline(); // first: if Git fails, the stop keeps the set-aside slice intact
   delete state.setAsideSlices[slice.id];
   const c = entry.cur;
   const done = state.slices[entry.before];
   const commits = done?.base && done.head && done.head !== done.base ? git(['log', '--format=%h %s', `${done.base}..${done.head}`]) : '';
-  state.cur = { ...c, ...sliceBaseline(), baseStatus: undefined, pending: null, fresh: false, resumed: RUN_ID };
+  state.cur = { ...c, ...baseline, baseStatus: undefined, pending: null, fresh: false, resumed: RUN_ID };
   if (entry.resume) {
     const pre = parsePlan().find((s) => s.id === entry.before);
     queue({

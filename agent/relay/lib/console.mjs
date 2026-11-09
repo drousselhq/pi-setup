@@ -174,7 +174,7 @@ export function compactionText(n) {
 }
 
 export const PURPOSE = {
-  plan: 'write the plan', prep: 'prepare the slice', implement: 'implement', final: 'final verification', verify: 'verify again',
+  plan: 'write the plan', prep: 'prepare the slice', implement: 'implement', final: 'final verification', verify: 'verify again', commit: 'commit leftovers',
   review: 'review', help: 'answer a question',
 };
 

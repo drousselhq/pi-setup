@@ -3,7 +3,7 @@
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import { ctx, git, io, state } from './runtime.mjs';
+import { ctx, git, io, RelayStop, state } from './runtime.mjs';
 
 // Whether a slice changed anything is decided by content, not by `git status`: with commit: false a
 // file that is already modified stays " M file" however often it changes. The fingerprint covers HEAD,
@@ -38,6 +38,20 @@ export function changedPaths(head = git(['rev-parse', '--verify', '--quiet', 'HE
   return [...new Set(`${changed}\0${untracked}`.split('\0').filter(Boolean))].sort();
 }
 
+// One file's content digest ('unreadable' when it cannot be read).
+export function fileDigest(rel) {
+  const h = createHash('sha256');
+  try { hashPath(h, rel); } catch { return 'unreadable'; }
+  return h.digest('hex');
+}
+
+// Every path that differs from HEAD (or is untracked), outside .agents_work/, with its content digest; null when
+// Git cannot list them.
+export function changedFiles() {
+  const paths = changedPaths();
+  return paths && Object.fromEntries(paths.map((rel) => [rel, fileDigest(rel)]));
+}
+
 export function workFingerprint() {
   const head = git(['rev-parse', '--verify', '--quiet', 'HEAD']);
   const paths = changedPaths(head);
@@ -51,7 +65,28 @@ export function workFingerprint() {
 }
 
 // The point a slice's changes are measured from: when it starts, and when it resumes after being set aside.
-export const sliceBaseline = () => ({ base: git(['rev-parse', 'HEAD']), baseContent: workFingerprint() });
+// baseFiles: what already differed from HEAD, with its content, so changes made during the slice can be told apart.
+// Without it the relay could not tell later which changes are the slice's: a Git failure stops the relay instead.
+export function sliceBaseline() {
+  const baseFiles = changedFiles();
+  if (baseFiles === null) throw new RelayStop('Git could not list the working tree\'s changes to record where this slice starts. Check Git, then re-run pi-relay.');
+  return { base: git(['rev-parse', 'HEAD']), baseContent: workFingerprint(), baseFiles };
+}
+
+// Changes made during this slice and not committed: what differs from HEAD now and was not there, or had other
+// content, when the slice started or resumed, plus the slice's own uncommitted acceptance tests (the baseline is
+// taken again after they are written); never .agents_work/ or a set-aside slice's acceptance tests, which stay
+// uncommitted on purpose. Empty for a slice started by an earlier relay version (no baseline to compare with);
+// null when Git cannot list the changes.
+export function strayChanges() {
+  const c = state.cur;
+  if (c?.baseFiles === undefined) return []; // a slice started by an earlier relay version
+  const now = changedPaths();
+  if (now === null) return null;
+  const own = new Set(c.acceptance?.tests ?? []);
+  const aside = new Set(Object.values(state.setAsideSlices ?? {}).flatMap((e) => e.cur?.acceptance?.tests ?? []));
+  return now.filter((rel) => !aside.has(rel) && (own.has(rel) || c.baseFiles[rel] !== fileDigest(rel)));
+}
 
 export function sliceChanged() {
   const c = state.cur;

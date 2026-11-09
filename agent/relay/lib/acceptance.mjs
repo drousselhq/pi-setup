@@ -8,10 +8,9 @@
 // the reviewer, to the worker that resumes a set-aside slice, and lists them as "not this work" for a
 // prerequisite slice that runs while they sit in the working tree.
 
-import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import { changedPaths, hashPath, sliceBaseline } from './changes.mjs';
+import { changedFiles, sliceBaseline } from './changes.mjs';
 import { emit } from './console.mjs';
 import { ctx, git, io, state } from './runtime.mjs';
 import { artifactPath, sliceDir } from './steps.mjs';
@@ -19,18 +18,6 @@ import { artifactPath, sliceDir } from './steps.mjs';
 export const PREP_ORDER = ['scout', 'architect', 'acceptance'];
 
 const snapshotDir = (sliceId) => path.join(sliceDir(sliceId), 'acceptance-original');
-
-function digest(rel) {
-  const h = createHash('sha256');
-  try { hashPath(h, rel); } catch { return 'unreadable'; }
-  return h.digest('hex');
-}
-
-// Every path that differs from HEAD (or is untracked), outside .agents_work/, with its content digest.
-function changedFiles() {
-  const paths = changedPaths();
-  return paths && Object.fromEntries(paths.map((rel) => [rel, digest(rel)]));
-}
 
 // The acceptance worker's step. Queuing it records what already differed, so its own changes can be told apart.
 export function acceptanceStep(slice) {

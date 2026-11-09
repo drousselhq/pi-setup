@@ -119,6 +119,13 @@ the terminal.
 - **Stops (exit code 2):** a repair-cycle limit, the scout/architect request limit, or a missing
   plan. Read the message in `relay/log.md`, adjust `plan.md`/`handoff.md` if needed, then run `pi-relay <topic>` again.
   Re-running after a limit stop allows that many more cycles or requests.
+- **Uncommitted work** (with `commit: true`): changes made during a slice must be committed by its worker. When a
+  worker reports done while some remain, it is asked once (each time it reports done with leftovers) to commit
+  those that belong to the slice and to leave the rest alone; if changes are still left, the relay stops (exit 2)
+  and lists them, and no slice is recorded done with them, nor while Git cannot list the changes. In the final
+  verification, a commit step never counts as verification: if the files changed, the relay asks for another. Your own edits during a slice show up there too: commit or stash them, then re-run (the
+  worker's result is used again). Changes made before the slice, `.agents_work/`, and a set-aside slice's
+  acceptance tests never count; the slice's own acceptance tests do until committed.
 - **The final verification** runs the project's full verification on the whole candidate. Its worker reports
   `verification: pass | fail` on every result. The relay announces completion only on a pass it saw in the
   current run, for the files as they are when it finishes (their content, so committing verified work changes

@@ -2,7 +2,7 @@
 
 import { acceptanceStep, implementerNote, PREP_ORDER, recordAcceptance, reviewerNote } from './acceptance.mjs';
 import { releaseAgent, releaseAll } from './agents.mjs';
-import { candidateTree, sliceChanged } from './changes.mjs';
+import { candidateTree, sliceChanged, strayChanges } from './changes.mjs';
 import { C, compactionText, emit, event, fmtDuration, GUTTER, log, out, resultIcon, resultLabel, roleTag, shortModel } from './console.mjs';
 import { checkPlan, FINAL_SLICE, parsePlan, PLAN_FORMAT, PLAN_SLICE, progress, progressText } from './plan.mjs';
 import { cfg, ctx, git, HELP_STATUSES, now, plural, RelayStop, RUN_ID, state } from './runtime.mjs';
@@ -49,10 +49,12 @@ export function implementMessage(slice) {
 export function reviewMessage() {
   const c = state.cur;
   const candidate = cfg.commit ? `commits ${c.base}..HEAD` : `the working-tree changes since ${c.base}`;
+  const strays = cfg.commit ? strayChanges() : [];
+  const uncommitted = strays?.length ? ` Not committed, though made during this slice: ${strayList(strays)}; report it if it matters.` : '';
   if (!c.reviewed) {
     return {
       role: 'reviewer', purpose: 'review', initial: true,
-      text: `Review the implementation of this slice: ${candidate} (exclude the pre-existing changes listed above). `
+      text: `Review the implementation of this slice: ${candidate} (exclude the pre-existing changes listed above).${uncommitted} `
         + 'Set verdict "accept" when the slice acceptance is met with no blocking finding. '
         + 'A finding is blocking only if it violates the slice acceptance, the handoff or a project contract, or has a concrete material consequence. '
         + 'Everything else is non-blocking: record it, but do not list it in "blocking".' + reviewerNote(),
@@ -60,7 +62,7 @@ export function reviewMessage() {
   }
   return {
     role: 'reviewer', purpose: `rereview${c.cycle}`,
-    text: `The ${c.senior ? 'senior implementer' : 'implementer'} addressed findings ${c.findings.join(', ') || '(see review)'}; the candidate is now ${candidate}. `
+    text: `The ${c.senior ? 'senior implementer' : 'implementer'} addressed findings ${c.findings.join(', ') || '(see review)'}; the candidate is now ${candidate}.${uncommitted} `
       + 'Re-review those repairs and their adjacent regression risk only; do not restart a full audit. Update your review and verdict.'
       + reviewerNote(),
   };
@@ -213,6 +215,7 @@ function applyResult(c, p, r) {
 
   if (p.role === 'implementer' || p.role === 'senior') {
     if (slice.id === 'FINAL') return finalResult(c, p, r);
+    if (strayStep(c, p)) return;
     return queue(reviewMessage());
   }
 
@@ -245,6 +248,37 @@ function applyResult(c, p, r) {
   }
 }
 
+// ---------- uncommitted work (commit: true) ----------
+// Changes made during a slice must be committed by its worker: it is asked once to commit what belongs to the
+// slice; if changes are still left after that, the relay stops for the owner (the result is replayed on re-run).
+
+const strayList = (strays) => strays.slice(0, 20).join(', ') + (strays.length > 20 ? ` and ${strays.length - 20} more` : '');
+
+function strayStep(c, p) {
+  if (!cfg.commit) return false;
+  const strays = strayChanges();
+  if (strays === null) throw gitListStop(c);
+  if (!strays.length) { c.strayAsked = false; return false; }
+  if (!c.strayAsked) {
+    c.strayAsked = true;
+    queue({
+      role: p.role, purpose: 'commit', initial: false,
+      text: `These changes are not committed: ${strayList(strays)}. Commit those that belong to this slice (explicit paths). `
+        + 'Leave anything else untouched and list it in your summary.'
+        + (c.slice === 'FINAL' ? ' Report "verification" as for your last full verification; if the files change, the relay asks for another.' : ''),
+    });
+    return true;
+  }
+  throw strayStop(c, strays);
+}
+
+const gitListStop = (c) => new RelayStop(`${c.slice}: Git could not list the working tree's changes, so the relay cannot `
+  + `tell whether any are left uncommitted. Check Git, then re-run pi-relay ${ctx.topic}.`);
+
+const strayStop = (c, strays) => new RelayStop(`${c.slice}: changes made during this slice are still not committed: ${strayList(strays)}. `
+  + 'Commit those that belong to the slice; commit or stash the others (your own edits during the slice show up here too). '
+  + `Then re-run pi-relay ${ctx.topic}.`);
+
 // ---------- the final verification ----------
 // It ends only on a pass the relay saw in this run, for the candidate as it is now (candidateTree()): a pass
 // read after a restart, or a candidate changed after the pass, gets one more verification; a change after that
@@ -262,8 +296,10 @@ function finalResult(c, p, r) {
       + `fix the cause or decide what to do, then re-run pi-relay ${ctx.topic}: the same worker runs the full verification again.`);
   }
   const tree = candidateTree();
-  // Seen in this run: evidence for these files, in this run only (a restart needs a new verification).
-  c.verified = r._mtime >= ctx.runStartedAt && tree ? { tree, run: RUN_ID } : null;
+  // Seen in this run: evidence for these files, in this run only (a restart needs a new verification). A commit
+  // step only commits: its result keeps the earlier verification, which finishFinal() compares with the files.
+  if (p.purpose !== 'commit') c.verified = r._mtime >= ctx.runStartedAt && tree ? { tree, run: RUN_ID } : null;
+  if (strayStep(c, p)) return;
   const unreviewed = c.reviewed ? c.acceptedTree !== tree : sliceChanged();
   return unreviewed ? queue(reviewMessage()) : finishFinal(c, tree);
 }
@@ -289,6 +325,11 @@ function finishFinal(c, tree) {
 // their tabs after saving).
 export function finishSlice(extra = {}) {
   const c = state.cur;
+  if (cfg.commit && c.slice !== 'PLAN') { // never done with uncommitted work (the result is replayed on re-run)
+    const strays = strayChanges();
+    if (strays === null) throw gitListStop(c);
+    if (strays.length) throw strayStop(c, strays);
+  }
   releaseAll();
   const head = git(['rev-parse', 'HEAD']);
   const commits = c.base && head && head !== c.base ? git(['log', '--format=%h %s', `${c.base}..HEAD`]) : '';

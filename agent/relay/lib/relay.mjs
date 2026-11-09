@@ -20,13 +20,14 @@ import { sessionCache } from './usage.mjs';
 export function runSlice(slice) {
   if (!state.cur && state.setAsideSlices?.[slice.id]) resumeSetAside(slice);
   if (!state.cur) {
+    const baseline = sliceBaseline(); // first: if Git fails, nothing has changed yet
     if (state.slices.FINAL && slice.id !== 'FINAL') { // new work after the final verification: it must run again
       delete state.slices.FINAL;
       emit('final_invalidated', { slice: slice.id });
       log(`${slice.id} added after the final verification: it will run again`, { quiet: true });
     }
     state.cur = {
-      slice: slice.id, ...sliceBaseline(),
+      slice: slice.id, ...baseline,
       cycle: 0, help: 0, agents: {}, assignments: {}, pending: null, queued: null, prep: [], findings: [],
       startedAt: Date.now(), fresh: true, resumed: RUN_ID,
     };

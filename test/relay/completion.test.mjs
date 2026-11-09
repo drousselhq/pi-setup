@@ -112,8 +112,8 @@ test('files changed after a passing verification get one more verification; chan
   let edits = 0;
   const h = new FakeHerdr(p, (c) => {
     if (c.role === 'implementer' && c.slice === 'FINAL') { p.commit(`final-${c.n}.txt`); return c.write(final()); } // fixes something, verifies
-    if (c.role === 'reviewer' && c.slice === 'FINAL') { // a reviewer that edits files (it must not)
-      fs.writeFileSync(`${p.project}/edited-${++edits}.txt`, 'x\n');
+    if (c.role === 'reviewer' && c.slice === 'FINAL') { // a reviewer that changes files (it must not); committed, so not a leftover
+      p.commit(`edited-${++edits}.txt`, 'x\n');
       return c.write(accept());
     }
     return standard(c);
