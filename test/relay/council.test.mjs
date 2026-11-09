@@ -82,6 +82,7 @@ test('two matching votes decide: recorded as the council\'s, delivered, notified
   assert.match(reviewer.assignment() + reviewer.text, /Council decision D1 .*It applies to this slice: check that its action and conditions were followed\./s);
   const types = p.events().map((e) => e.type);
   assert.ok(types.includes('council_decision') && !types.includes('operator_wait_start') && !types.includes('owner_decision'));
+  assert.equal(p.events().find((e) => e.type === 'council_decision').chosen, 1, 'the brief\'s number of the voted option');
   assert.equal(p.events().filter((e) => e.type === 'council_vote').length, 2);
   assert.match(h.output, /Decided by the advisory council[^\n]*\n[^\n]*D1 \(S1\): B: fix both/);
   assert.ok(Object.keys(p.state().slices).length > 0 && !p.state().cur?.agents?.council1, 'member tabs are closed');

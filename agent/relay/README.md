@@ -178,8 +178,8 @@ One JSON object per line. Every event has `t`, `run` (one ID per relay process),
 | `step_sent` / `step_result` | role, purpose / status, verdict, blocking, summary, question, verification, checks, durationMs, usage |
 | `operator_wait_start` / `operator_wait_end` | role, status, question / waitedMs |
 | `permission_wait` | role, waitedMs |
-| `advisor_start`, `advisor_brief` | workerRole, question / title, options, recommended |
-| `owner_decision`, `council_decision` | id, title, decision, workerRole, replies, slice |
+| `advisor_start`, `advisor_brief` | workerRole, question / the whole brief: title, question, context, options (every field), recommended, reason, notes, ownerNeeded |
+| `owner_decision`, `council_decision` | id, title, decision, chosen (the option's number, or null), workerRole, replies (roles), prerequisite (a prerequisite slice's title) |
 | `council_start`, `council_vote`, `council_escalation` | options, members / member, model, choice, classes, confidence, reversibility, ownerNeeded or failed / reasons |
 | `nudge`, `redeliver` | role, purpose, reason |
 | `fresh_session` | role, purpose, setAside, note (`--fresh`) |

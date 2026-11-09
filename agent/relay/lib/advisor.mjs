@@ -145,7 +145,10 @@ export function consultAdvisor(worker, p, r) {
         if (briefProblem(brief)) return fallback('incomplete brief');
         a.brief = brief;
         save();
-        emit('advisor_brief', { title: brief.brief.title ?? null, options: brief.brief.options.length, recommended: brief.brief.recommended ?? null });
+          // The whole brief, for later evaluation: the result file is overwritten by the decision.
+        const b = brief.brief;
+        emit('advisor_brief', { title: b.title ?? null, question: b.question ?? null, context: b.context ?? null, options: b.options,
+          recommended: b.recommended ?? null, reason: b.reason ?? null, notes: b.notes ?? [], ownerNeeded: b.ownerNeeded ?? null });
       }
       const got = decide(agent, a, slice, ask, p);
       if (got.fail) return fallback(...got.fail);
@@ -160,7 +163,8 @@ export function consultAdvisor(worker, p, r) {
     if (by === 'council') state.councilDecisions = [...(state.councilDecisions ?? []).filter((d) => d.id !== id), { id, title, slice: slice.id }];
     save();
     if (written) { // not again on a replay
-      emit(by === 'council' ? 'council_decision' : 'owner_decision', { id, title, decision: final.decision, workerRole: worker.role, replies: Object.keys(final.replies ?? {}), slice: final.slice?.title ?? null });
+      emit(by === 'council' ? 'council_decision' : 'owner_decision', { id, title, decision: final.decision, chosen: final.chosen ?? null,
+        workerRole: worker.role, replies: Object.keys(final.replies ?? {}), prerequisite: final.slice?.title ?? null });
       log(`${slice.id} ${by} decision ${id}: ${title}`, { quiet: true });
       event(C.green('\u2713'), `${C.green(C.bold(`${by === 'council' ? 'council ' : ''}decision ${id}`))} ${title}`, final.decision);
       if (by === 'council') notify(`Relay ${ctx.topic}: council decided ${id}`, `${title}\nRecorded in decisions.md; a later decision of yours can overrule it.`);
@@ -189,16 +193,25 @@ function decide(agent, a, slice, ask, p) {
   const answered = readResult(a.briefPath, a.brief._mtime + 1);
   let final = answered && answered._mtime > a.brief._mtime && answered.status !== 'needs-decision'
     ? answered : waitForOperator(agent, shown, { show: showBrief, track: false });
-  if (final.status === 'invalid' || (final.status === 'done' && !valid('advisor', final))) {
+  // chosen: the option the owner chose, by its number in the brief, or null (none of them, or changed). It is
+  // asked for once when missing; still missing after that, it is recorded as unknown (it only serves the records).
+  const n = a.brief.brief.options.length;
+  const badChosen = (f) => f?.chosen !== undefined && f.chosen !== null && !(Number.isInteger(f.chosen) && f.chosen >= 1 && f.chosen <= n);
+  const problems = (f) => [
+    ...(f.status === 'invalid' || !valid('advisor', f) ? [f.summary ?? 'no decision, or an incomplete slice'] : []),
+    ...(badChosen(f) ? [`"chosen" must be an option number from 1 to ${n}, or null`] : []),
+    ...(f.status === 'done' && f.chosen === undefined ? ['"chosen" is missing: the option\'s number, or null'] : []),
+  ];
+  if (final.status === 'invalid' || (final.status === 'done' && problems(final).length)) {
     // A malformed decision file: the owner has answered, so ask once for a corrected file.
-    ask(`Your result file ${a.briefPath} is invalid (${final.summary ?? 'no decision, or an incomplete slice'}). Rewrite it as valid JSON `
-      + 'with status "done", the decision, its title, the replies, if the owner chose one, the slice with a one-line title and '
-      + 'at least one acceptance condition, and, if the owner chose to postpone, the deferral with all four fields, as your assignment '
-      + 'describes. Do not ask the owner again.');
+    ask(`Your result file ${a.briefPath} is invalid (${problems(final).join('; ')}). `
+      + 'Rewrite it as valid JSON with status "done", the decision, its title, chosen, the replies, if the owner chose one, the slice '
+      + 'with a one-line title and at least one acceptance condition, and, if the owner chose to postpone, the deferral with all four '
+      + 'fields, as your assignment describes. Do not ask the owner again.');
     final = readResult(a.briefPath, a.sent) ?? final;
   }
   // Never let the advisor decide without the owner: a decision must follow a brief the owner saw.
-  if (!valid('advisor', final) || final.status !== 'done') return { fail: [`unexpected advisor result "${final?.status}"`, 'could not record your decision'] };
+  if (!valid('advisor', final) || final.status !== 'done' || badChosen(final)) return { fail: [`unexpected advisor result "${final?.status}"`, 'could not record your decision'] };
   return { final, by: 'owner', attribution: `**Decided by the owner.**${why.length ? ` It came to the owner because ${why.join('; ')}.` : ''}` };
 }
 

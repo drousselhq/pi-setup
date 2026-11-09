@@ -73,7 +73,8 @@ export function writeAssignment(role, purpose, slice, task) {
   "title": "short decision title", "decision": "the decision as it should be recorded",
   "deferral": ${deferral},  // only when the owner chose to postpone
   "replies": { "<role>": "instruction or note for that role" },
-  "slice": { "title": "...", "acceptance": ["..."], "notes": "..." },  // only when the owner chose a prerequisite slice`;
+  "slice": { "title": "...", "acceptance": ["..."], "notes": "..." },  // only when the owner chose a prerequisite slice
+  "chosen": 1,  // the number of the option the owner chose; null if he chose none of them or changed it`;
   const body = `# Relay assignment ${id}: ${role} for ${slice.id} — ${slice.title}
 
 You are one worker in an automated relay run by a script, not by a person. Nobody reads your
@@ -105,8 +106,10 @@ ${task}
 - Do not change ticket/tracker status. Put proposed tracker updates in your artifact.
 - Stay within the handoff's scope and the slice's acceptance. Optional improvements go in your
   artifact as suggestions; they are not work for this run.
-- Ask only when you genuinely cannot proceed (a product/scope decision, a missing permission or an
-  external blocker), or when a materially better approach needs authority you lack. Use \`needs-decision\` / \`blocked\` with one precise question. Never put a question for
+- Ask only when you genuinely cannot proceed, or when a materially better approach needs authority you lack.
+  Use \`needs-decision\`, with one precise question, for anything the owner's word can settle: a product or
+  scope decision, a permission, a choice between approaches. Use \`blocked\` only for what it cannot (a broken
+  tool, missing access, a full disk), saying what must be fixed. Never put a question for
   the owner only in your artifact while reporting \`done\`. For \`needs-decision\`, also give the options
   and your recommendation (fields below), written in plain words for an owner who does not know the
   code. The answer comes back to you in this session; then continue and overwrite the same result file.

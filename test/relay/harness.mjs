@@ -211,7 +211,7 @@ export const brief = (extra = {}) => ({
   brief: { title: 'T', question: 'Q?', context: 'C', options: [{ label: 'A', consequence: 'a' }, { label: 'B', consequence: 'b' }], recommended: 1, reason: 'r', notes: [], ...extra },
 });
 export const decision = (extra = {}) => ({
-  status: 'done', summary: 'owner chose', title: 'Test decision', decision: 'The owner chose A.',
+  status: 'done', summary: 'owner chose', title: 'Test decision', decision: 'The owner chose A.', chosen: 1,
   replies: { implementer: 'Proceed with A.', reviewer: 'Check A.' }, ...extra,
 });
 

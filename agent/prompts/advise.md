@@ -105,6 +105,8 @@ Use the result format your assignment gives for after the owner chose.
 - **decision:** the owner's decision as it should be recorded for every later worker: what was
   decided, its limits, and the reason in one sentence. Self-contained; no "option 2".
 - **title:** short title for the decision record.
+- **chosen:** the number of the option the owner chose in your brief; `null` if he chose none of them or
+  changed it.
 - **deferral:** only when the owner chose to postpone: the same four items, exact and technical.
   The relay records them with the decision so later workers and runs honour the interim behaviour
   and decide at the decision point; the decision says what was decided now.

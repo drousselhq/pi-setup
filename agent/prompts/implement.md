@@ -48,7 +48,8 @@ stopping. Follow the project's own instructions (AGENTS.md, CONTRIBUTING.md) for
   find its references with at least two different searches and update each one.
 - When stuck on a real design question, request architecture help (`needs-architecture` in relay
   mode) with one precise question. Ask for a scout (`needs-scout`) only for a large unknown area.
-  For a product/scope decision or a missing permission, use `needs-decision` / `blocked`.
+  For anything the owner's word can settle (a product or scope decision, a permission, a choice), use
+  `needs-decision`; `blocked` only for what it cannot (a broken tool, missing access), saying what must be fixed.
 - When distinct work with its own outcome must come first, stop before writing code for it and ask
   (`needs-decision`) with an option that proposes it as a prerequisite slice (see the result format).
 - Stop when the acceptance conditions are met and checks pass. Do not start an improvement pass.
