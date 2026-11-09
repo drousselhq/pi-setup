@@ -30,12 +30,6 @@ test('kill sweep: an owner decision and a council decision', { timeout: 600_000 
         return c.write(done());
       }
       if (c.role === 'advisor') {
-        if (/advisory council decided this question|Your decision file/.test(c.text)) {
-          // The members' conditions, as the relay gave them, go into the binding replies.
-          const conditions = [...c.text.matchAll(/^- (council\d: .*)$/gm)].map((m) => m[1]).join('\n');
-          return c.write(decision({ title: 'Fix the weight bug', decision: 'The advisory council decided: fix both.',
-            replies: { implementer: `Fix both.\n${conditions}`, reviewer: `Check both.\n${conditions}` } }));
-        }
         if (c.slice === 'S1') { c.write(brief({ options: OPTIONS, ownerNeeded: 'the owner prefers to decide this' })); return c.answer(ownerAnswer); }
         return c.write(brief({ options: OPTIONS, ownerNeeded: null }));
       }
@@ -46,6 +40,7 @@ test('kill sweep: an owner decision and a council decision', { timeout: 600_000 
   const ids = ref.decisions.match(/^## D\d+ /gm) ?? [];
   if (ids.join('') !== '## D1 ## D2 ') throw new Error(`expected decisions D1 and D2, got ${ids.join(' ')}`);
   const got = [...ref.delivered].join('\n');
+  // The council's binding reply is the relay's, built from the votes: the members' conditions must reach the worker.
   for (const line of ['Keep the old fixture.', 'council1: keep the old fixture', 'council2: keep the old fixture', 'Also check the fixture.']) {
     if (!got.includes(line)) throw new Error(`the scenario should deliver "${line}"; delivered:\n${got}`);
   }

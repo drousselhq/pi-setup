@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import { agentAlive, closeAgent, closeTabs, ensureAgent, releaseAgent, releaseAll } from './agents.mjs';
 import { sliceChanged } from './changes.mjs';
 import { C, callout, emit, event, log, roleTag } from './console.mjs';
-import { advisorOwnerReasons, classTable, councilAttribution, councilBriefProblem, councilEnabled, ownerNotes, runCouncil } from './council.mjs';
+import { advisorOwnerReasons, classTable, councilAttribution, councilBriefProblem, councilDecision, councilEnabled, ownerNotes, runCouncil } from './council.mjs';
 import { insertPrerequisite, prerequisiteId, setAside } from './prerequisites.mjs';
 import { quotaGate } from './quota.mjs';
 import { cfg, ctx, notify, RelayStop, state } from './runtime.mjs';
@@ -112,7 +112,7 @@ export function consultAdvisor(worker, p, r) {
         : slice.id === 'FINAL' ? 'The final verification has changed nothing yet, so a prerequisite slice can be added after the plan\'s last slice if the owner chooses one; the final verification then starts again after it.'
           : 'This slice has no commits or changes yet, so a prerequisite slice can be inserted before it if the owner chooses one.')
       + (councilEnabled()
-        ? `\n\nThe advisory council is enabled. Give every option in your brief an "action" (what workers will do, exact and technical) and its "classes", and set "ownerNeeded" (null, or why the owner must decide). The relay then either shows your brief to the owner, or has two council members vote on it and asks you to write their decision. Classes:\n\n${classTable()}`
+        ? `\n\nThe advisory council is enabled. Give every option in your brief an "action" (what workers will do, exact and technical) and its "classes", and set "ownerNeeded" (null, or why the owner must decide). The relay then either shows your brief to the owner, or has two council members vote on it: when they agree, the relay records the chosen option's action word for word, with the members' conditions, as the binding decision and sends it to the worker, so write every action self-contained (no "as in option 2"). You do not write a council decision. Classes:\n\n${classTable()}`
         : ''));
     a = c.advice = { workerRole: worker.role, workerMtime: r._mtime, workerResult: r._path, briefPath: resultPathFor('advisor', 'brief'), startedAt: Date.now(), sent: 0 };
     c.assignments.advisor = assignment;
@@ -147,7 +147,7 @@ export function consultAdvisor(worker, p, r) {
         save();
         emit('advisor_brief', { title: brief.brief.title ?? null, options: brief.brief.options.length, recommended: brief.brief.recommended ?? null });
       }
-      const got = decide(agent, a, slice, ask);
+      const got = decide(agent, a, slice, ask, p);
       if (got.fail) return fallback(...got.fail);
       a.recording = { id: nextDecisionId(), final: got.final, by: got.by, attribution: got.attribution };
       save();
@@ -170,19 +170,17 @@ export function consultAdvisor(worker, p, r) {
   return deliver(worker, p, a, slice);
 }
 
-// The decision for the brief: the council's when it agrees on a delegated option, else the owner's.
-// Returns { final, by, attribution } or { fail: [why, what] }.
-function decide(agent, a, slice, ask) {
+// The decision for the brief: the council's when it agrees on a delegated option (built by the relay from
+// the vote), else the owner's. A worker that could not follow a council decision in this step asks the owner:
+// the council is not asked again. Returns { final, by, attribution } or { fail: [why, what] }.
+function decide(agent, a, slice, ask, p) {
   let notes = [];
   let why = [];
   if (councilEnabled()) {
-    const direct = advisorOwnerReasons(a.brief);
+    const asked = state.cur.councilAsked?.[stepKey(p)];
+    const direct = [...advisorOwnerReasons(a.brief), ...(asked ? [`the ${a.workerRole} asked again after council decision ${asked}`] : [])];
     const outcome = direct.length ? { owner: direct } : runCouncil(a, slice);
-    if (outcome.decided !== undefined) {
-      const final = councilFinal(agent, a, outcome, ask);
-      if (final.problem) return { fail: [final.problem, 'could not write the council\'s decision'] };
-      return { final, by: 'council', attribution: councilAttribution(a) };
-    }
+    if (outcome.decided !== undefined) return { final: councilDecision(a, outcome), by: 'council', attribution: councilAttribution(a) };
     why = outcome.owner;
     notes = a.council ? ownerNotes(a) : [`The advisory council was not consulted: ${why.join('; ')}.`];
   }
@@ -204,44 +202,21 @@ function decide(agent, a, slice, ask) {
   return { final, by: 'owner', attribution: `**Decided by the owner.**${why.length ? ` It came to the owner because ${why.join('; ')}.` : ''}` };
 }
 
-// The advisor writes the council's decision to its own file; it must match the chosen option.
-function councilFinal(agent, a, outcome, ask) {
-  const o = a.brief.brief.options[outcome.decided];
-  a.finalPath ??= resultPathFor('advisor', 'decision');
-  save();
-  const problem = (f) => {
-    if (!f) return 'no decision written';
-    if (f.status === 'blocked') return `the advisor could not write it: ${f.summary ?? f.question ?? ''}`;
-    if (f.status !== 'done' || !valid('advisor', f)) return `invalid decision (${f.summary ?? f.status})`;
-    if (Boolean(o.deferral) !== Boolean(f.deferral)) return o.deferral ? 'the chosen option postpones, but the decision has no deferral' : 'the decision adds a deferral the chosen option does not have';
-    if (Boolean(o.slice) !== Boolean(f.slice)) return o.slice ? 'the chosen option inserts a prerequisite slice, but the decision has none' : 'the decision adds a prerequisite slice the chosen option does not have';
-    return null;
-  };
-  let final = readResult(a.finalPath, a.startedAt);
-  if (!final) {
-    const conditions = outcome.conditions.length ? `Conditions the members added (keep them; they limit the action):\n${outcome.conditions.map((x) => `- ${x}`).join('\n')}\n\n` : '';
-    ask(`The advisory council decided this question; the owner is not asked. Both members chose option ${outcome.decided + 1}, "${o.label}" `
-      + `(their votes: ${Object.values(a.council.members).map((m) => m.votePath).join(', ')}).\n\nAction: ${o.action}\n\n${conditions}`
-      + 'Write the decision as your assignment describes for after the owner chose: the decision (this option\'s action and the conditions, exact and technical, self-contained, saying the advisory council decided it), its title, the replies'
-      + `${o.deferral ? ', the deferral of this option with all four fields' : ''}${o.slice ? ', and the prerequisite slice of this option' : ''}. Do not add scope or change the action. `
-      + 'If the conditions contradict each other or the action, write status "blocked" with the contradiction instead.'
-      + `\n\nResult file (status "done"): ${a.finalPath}`, a.finalPath);
-    final = readResult(a.finalPath, a.sent);
-  }
-  const first = problem(final);
-  if (first && final?.status !== 'blocked') {
-    ask(`Your decision file ${a.finalPath} is not acceptable: ${first}. Rewrite it for the council's choice, option ${outcome.decided + 1}, as described above.`, a.finalPath);
-    final = readResult(a.finalPath, a.sent) ?? final;
-  }
-  const last = problem(final);
-  return last ? { problem: last } : final;
-}
-
 function deliver(worker, p, a, slice) {
   const c = state.cur;
   const { final } = a;
   const { id } = a.recorded;
   const label = `${a.by === 'council' ? 'Council' : 'Owner'} decision ${id}`;
+  // Notes for the other roles first: a set-aside slice keeps them for when it resumes.
+  for (const [role, text] of Object.entries(a.notesAdded ? {} : final.replies ?? {})) {
+    if (role === worker.role || !text) continue;
+    c.notes = c.notes ?? {};
+    c.notes[role] = [c.notes[role], `${label} (${ctx.decisions}): ${text}`].filter(Boolean).join('\n\n');
+  }
+  a.notesAdded = true;
+  // A council decision marks the step it answered in the slice's state: a later question from that step goes to
+  // the owner (decide()). Whatever rebuilds the step (resume, retry, the senior, --fresh) keeps its key.
+  if (a.by === 'council') c.councilAsked = { ...c.councilAsked, [stepKey(p)]: id };
   if (final.slice) {
     const blocked = prerequisiteBlocked(slice);
     if (blocked) {
@@ -261,12 +236,6 @@ function deliver(worker, p, a, slice) {
     setAside(a.inserted, { role: worker.role, purpose: p.purpose, text: `${label} (recorded in ${ctx.decisions}): ${final.replies?.[worker.role] ?? final.decision}` });
     return 'set-aside';
   }
-  for (const [role, text] of Object.entries(a.notesAdded ? {} : final.replies ?? {})) {
-    if (role === worker.role || !text) continue;
-    c.notes = c.notes ?? {};
-    c.notes[role] = [c.notes[role], `${label} (${ctx.decisions}): ${text}`].filter(Boolean).join('\n\n');
-  }
-  a.notesAdded = true;
   const reply = final.replies?.[worker.role] ?? final.decision;
   // The worker's question stays readable until the decision has reached it (p.sentAt moves only below), so a
   // restart in between finds the question, resumes this advice and finishes the delivery attempt.
@@ -277,9 +246,17 @@ function deliver(worker, p, a, slice) {
       + `Write this step's result JSON (same format) to: ${p.resultPath}`, p.resultPath);
   }
   p.sentAt = at;
+  p.answered = a.workerMtime; // that version of the result file is the question just answered, never a new one
   c.advice = null; // only now: a restart before this point delivers the recorded decision again
   save();
   return true;
+}
+
+// One step of a slice, the same across whatever rebuilds it: its role (the senior continues the implementer's
+// step) and purpose (help steps by their number: several can share a role).
+function stepKey(p) {
+  const role = p.role === 'senior' ? 'implementer' : p.role;
+  return `${role}:${p.purpose === 'help' ? `help${state.cur.help}` : p.purpose}`;
 }
 
 // A prerequisite slice chosen during a final verification that changed nothing: the slice was appended to the

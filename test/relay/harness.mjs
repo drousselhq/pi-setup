@@ -192,10 +192,12 @@ export class FakeHerdr {
 
 // A result's time is the relay's clock (Date.now(), which the fault sweep advances), as for a real worker
 // writing while the relay waits.
+// Successive writes of a file never go back in time.
 export function writeResult(file, obj, { after } = {}) {
   const before = after && fs.existsSync(after) ? fs.statSync(after).mtimeMs : null;
+  const previous = fs.existsSync(file) ? fs.statSync(file).mtimeMs : null;
   fs.writeFileSync(file, typeof obj === 'string' ? obj : JSON.stringify(obj, null, 2));
-  const t = new Date(before !== null ? Math.max(before + 1000, Date.now()) : Date.now());
+  const t = new Date(Math.max(Date.now(), before !== null ? before + 1000 : 0, previous !== null ? previous + 1 : 0));
   fs.utimesSync(file, t, t);
 }
 

@@ -75,15 +75,18 @@ the terminal.
     `ownerNeeded`, reasons and a plain-language summary for you.
   - **The council decides** only when both choose the same listed option and neither vote, nor the advisor's
     classes for that option, puts it in a class you keep, says you are needed, calls it irreversible, and
-    when not both have low confidence. The advisor then writes the decision from that option's action and the
-    members' conditions; the relay checks it matches the option (no added deferral or prerequisite slice).
+    when not both have low confidence. The relay then records the decision itself, from what was voted: the
+    option's label, its action, deferral or prerequisite slice as the advisor wrote them, and the members'
+    conditions, word for word; the waiting worker gets the same as a binding instruction, and the reviewer a
+    pointer to it. If the worker cannot satisfy it, its question comes to you without a second vote.
     You get a notification, the decision is recorded as **Decided by the council** with the models, classes
     and reversibility, and the closing summary lists the run's council decisions. A later decision of yours
     can overrule it.
   - **Anything else comes to you** in the advisor's brief, with why the council sent it and each member's
     proposal in plain words. A member that cannot start, disappears, gives no valid vote after one
     reminder, or is still working after `council.timeoutMinutes` sends the question to you: one vote never
-    decides. If the advisor cannot write a council decision, you are asked in the worker's tab.
+    decides. Before the vote, every option must be complete (an action, its classes, and a valid deferral or
+    prerequisite slice if it has one); members see every field that would bind.
 
   Classes (the owner keeps E to I by default):
 

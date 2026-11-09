@@ -45,7 +45,9 @@ a reasonable reviewer could differ, `low` when you are close to guessing.
 ## 4. Write your vote
 
 Write the vote file named in the assignment, in the format the assignment gives. Conditions only
-limit the chosen action; they never add scope. The objection is the strongest case against your own
+limit the chosen action; they never add scope. If both members choose the same option, the relay records
+its action and both members' conditions word for word as the binding decision and sends them to the
+waiting worker: write each condition as a self-contained limit the worker can check. The objection is the strongest case against your own
 choice, stated honestly.
 
 The owner summary follows the owner's register: no code identifiers, file names or rule numbers; short

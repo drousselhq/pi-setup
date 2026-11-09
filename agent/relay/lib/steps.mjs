@@ -256,6 +256,8 @@ export function collect() {
       return { status: 'runaway', summary: `Interrupted after ${plural(p.runaway.compactions, 'compaction')} and ${plural(p.runaway.turns, 'turn')} in one step.` };
     }
     let r = readResult(p.resultPath, p.sentAt);
+    // The question a decision answered (its exact version, or older) is never read as a new result.
+    if (r && p.answered !== undefined && r._mtime <= p.answered) r = null;
     if (!r && agent.name !== p.agent) {
       // Restarted agent: deliver the step again rather than nudging about a message it never saw.
       p.agent = agent.name;

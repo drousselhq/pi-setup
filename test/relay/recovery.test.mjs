@@ -220,6 +220,19 @@ test('a brief the owner already answered is not shown again after a kill: his an
   assert.equal(p.read('decisions.md').match(/^## D\d+ /gm).length, 1);
 });
 
+test('after a decision, a worker that writes no new result is reminded: its answered question is not read as a new one', () => {
+  const p = makeProject({ plan: ONE });
+  const h = new FakeHerdr(p, (c) => {
+    if (c.role === 'implementer' && c.slice === 'S1' && c.n === 1) return ask(c);
+    if (c.role === 'implementer' && c.slice === 'S1' && c.n === 2) return undefined; // got the decision, wrote nothing yet
+    if (c.role === 'advisor') { c.write(brief()); return c.answer(decision()); }
+    return standard(c);
+  });
+  assert.equal(h.run(), 0);
+  assert.match(h.prompts.filter((c) => c.role === 'implementer')[2].text, /You stopped without writing the result file/);
+  assert.equal(p.read('decisions.md').match(/^## D\d+ /gm).length, 1, 'no second decision for the same question');
+});
+
 test('a prerequisite slice chosen during planning stops with advice instead of looping', () => {
   const p = makeProject({ plan: null });
   const h = new FakeHerdr(p, (c) => {

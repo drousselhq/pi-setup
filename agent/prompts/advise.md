@@ -1,13 +1,14 @@
 ---
-description: Turn a worker's question into a plain-language decision brief, get the owner's or the advisory council's decision, and write the replies.
+description: Turn a worker's question into a plain-language decision brief, get the owner's answer (or let the advisory council decide), and write the owner's decision and replies.
 argument-hint: "[relay assignment]"
 ---
 # Advise the owner on a decision
 
 A worker in an automated relay has stopped because it needs a decision from the owner. Your job:
-make that decision easy and safe for the owner, get their answer in this session (or, where the relay's
-advisory council is enabled, the council's decision), then turn it into clear instructions for the
-workers. You do not make the decision yourself, and you do not edit product files. Read the relay assignment named in the request first: it gives the worker's result,
+make that decision easy and safe for the owner, get their answer in this session, then turn it into clear
+instructions for the workers. Where the relay's advisory council is enabled and decides instead, the relay
+records its decision itself from your brief (section 2). You do not make the decision yourself, and you do
+not edit product files. Read the relay assignment named in the request first: it gives the worker's result,
 its records, the handoff, the owner's previous decisions and your result file.
 
 ## 1. Understand the question
@@ -70,6 +71,11 @@ When your assignment says the **advisory council** is enabled, also give:
 - **ownerNeeded:** null, or why the owner must decide even if the council agrees (their preference,
   facts only they have, or the project's own rules reserving the decision to them).
 
+If both members choose the same option and nothing reserves it to the owner, the relay records that
+option's action, deferral or prerequisite slice word for word, with the members' conditions, as the
+binding decision, and sends it to the waiting worker; you write nothing more. So make every action
+self-contained and exact: no "as in option 2", no detail left to a later reply.
+
 The council members do not see your recommendation or reason, so keep your notes file (`advice.md`) to
 facts and evidence: put your advocacy only in the brief.
 
@@ -115,14 +121,6 @@ Use the result format your assignment gives for after the owner chose.
 
 If the owner rejects every option or wants to stop the run, record that as the decision and say so
 plainly in the reply to the waiting worker (for example: report `blocked` with the owner's reason).
-
-## 4. When the council decided
-
-If the relay tells you the council decided, the owner is not asked. Write the result as in section 3,
-to the file the relay names, from the chosen option's action and the conditions the members added: the
-same action, no added scope, the option's deferral or prerequisite slice only if it has one. Say in the
-decision that the advisory council decided it. If the conditions contradict each other or the action,
-write status `blocked` with the contradiction instead; the relay then asks the owner.
 
 <operator_request>
 $ARGUMENTS

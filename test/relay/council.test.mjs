@@ -26,17 +26,19 @@ const vote = (choice = 'X2', extra = {}) => ({
   status: 'done', choice, conditions: [], classes: ['A'], ownerNeeded: null, confidence: 'high', reversibility: 'easy',
   reasons: 'the evidence', objection: 'none decisive', ownerSummary: `I would ${choice === 'X2' ? 'fix both' : 'fix one'}.`, ...extra,
 });
+// A decision written as if by the advisor, which the relay must ignore for a council decision.
 const councilDecision = (extra = {}) => decision({ title: 'Fix the weight bug', decision: 'The advisory council decided: fix the weight bug completely.', replies: { implementer: 'Fix both.', reviewer: 'Check both fixes.' }, ...extra });
 
-// Plays the worker, the advisor and both members. `votes` gives each member's vote(s) by call number.
-function play({ votes = {}, final = councilDecision(), owner = decision() } = {}) {
+// Plays the worker, the advisor and both members. `votes` gives each member's vote(s) by call number. The
+// advisor writes only the brief (and the owner's decision when the question reaches the owner); any other
+// advisor prompt fails the test through standard().
+function play({ votes = {}, owner = decision() } = {}) {
   return (c) => {
     if (c.role === 'implementer' && c.slice === 'S1' && c.n === 1) return askOnce(c);
     if (c.role === 'advisor' && c.n === 1) {
       c.write(cbrief());
       return c.answer(owner); // used only if the question reaches the owner
     }
-    if (c.role === 'advisor') return typeof final === 'function' ? final(c) : c.write(final);
     if (c.role === 'council1' || c.role === 'council2') {
       const v = votes[c.role]?.[c.n - 1] ?? vote();
       return typeof v === 'function' ? v(c) : c.write(v);
@@ -72,16 +74,16 @@ test('two matching votes decide: recorded as the council\'s, delivered, notified
   // The assignment gives the vote format itself, with every field of a vote the relay accepts.
   assert.match(assignment, /"choice": "X1 \| X2 \| new"/);
   for (const k of Object.keys(vote())) assert.match(assignment, new RegExp(`"${k}":`), `vote format has ${k}`);
-  const final = h.prompts.find((x) => x.role === 'advisor' && x.n === 2).text;
-  assert.match(final, /Both members chose option 1, "B: fix both"[\s\S]*- keep the old fixture/);
-  assert.match(p.read('decisions.md'), /## D1 · .* · S1 · Fix the weight bug\n\nThe advisory council decided: fix the weight bug completely\.\n\n\*\*Decided by the council\*\* \(both members chose this option independently; council1 low, council2 low; class A; easy to reverse\)\. A later owner decision may overrule this one\.\n$/);
-  assert.match(h.prompts.find((x) => x.role === 'implementer' && x.n === 2).text, /^Council decision D1 .*\n\nFix both\./);
+  assert.equal(h.prompts.filter((x) => x.role === 'advisor').length, 1, 'the advisor writes the brief only: the relay records the council\'s decision');
+  assert.match(p.read('decisions.md'), /## D1 · .* · S1 · B: fix both\n\nThe advisory council decided: B: fix both\.\nAction: Fix the weight bug completely\.\nConditions the members added \(they limit the action\):\n- keep the old fixture\n\n\*\*Decided by the council\*\* \(both members chose this option independently; council1 low, council2 low; class A; easy to reverse\)\. A later owner decision may overrule this one\.\n$/);
+  assert.match(h.prompts.find((x) => x.role === 'implementer' && x.n === 2).text,
+    /^Council decision D1 .*\n\nAction: Fix the weight bug completely\.\nConditions the members added \(they limit the action\):\n- keep the old fixture\nThis is binding: do not change the action\. If you cannot satisfy it and its conditions together, report needs-decision/);
   const reviewer = h.prompts.find((x) => x.role === 'reviewer');
-  assert.match(reviewer.assignment() + reviewer.text, /Council decision D1 .*Check both fixes\./s);
+  assert.match(reviewer.assignment() + reviewer.text, /Council decision D1 .*It applies to this slice: check that its action and conditions were followed\./s);
   const types = p.events().map((e) => e.type);
   assert.ok(types.includes('council_decision') && !types.includes('operator_wait_start') && !types.includes('owner_decision'));
   assert.equal(p.events().filter((e) => e.type === 'council_vote').length, 2);
-  assert.match(h.output, /Decided by the advisory council[^\n]*\n[^\n]*D1 \(S1\): Fix the weight bug/);
+  assert.match(h.output, /Decided by the advisory council[^\n]*\n[^\n]*D1 \(S1\): B: fix both/);
   assert.ok(Object.keys(p.state().slices).length > 0 && !p.state().cur?.agents?.council1, 'member tabs are closed');
 });
 
@@ -133,7 +135,6 @@ test('a brief without actions and classes goes back to the advisor when the coun
   const h = new FakeHerdr(p, (c) => {
     if (c.role === 'advisor' && c.n === 1) return c.write(brief());
     if (c.role === 'advisor' && c.n === 2) { assert.match(c.text, /option 1 needs "action" .* and "classes"/); return c.write(cbrief()); }
-    if (c.role === 'advisor') return c.write(councilDecision());
     return play()(c);
   });
   assert.equal(h.run(), 0);
@@ -186,25 +187,186 @@ test('a member that keeps working past the time limit is dropped and the owner d
   assert.match(p.read('decisions.md'), /\*\*Decided by the owner\.\*\*/);
 });
 
-test('the advisor\'s record of a council decision must match the chosen option, else the owner is asked in the worker\'s tab', () => {
-  for (const [bad, why] of [
-    [councilDecision({ slice: { title: 'Extra step', acceptance: ['x'] } }), /adds a prerequisite slice the chosen option does not have/],
-    [{ status: 'blocked', summary: 'the two conditions contradict' }, /the advisor could not write it: the two conditions contradict/],
-  ]) {
+test('the relay records the council\'s decision from the vote: a decision the advisor writes anyway is ignored', () => {
+  const p = project();
+  let briefPath = null;
+  let stray = null;
+  const h = new FakeHerdr(p, (c) => {
+    if (c.role === 'advisor' && c.n === 1) { briefPath = c.resultPath; return c.write(cbrief()); }
+    if (c.role === 'council1') { // while the members vote, the advisor writes a decision nobody asked for, with another action
+      writeResult(briefPath, councilDecision({ title: 'Push it', decision: 'The council approved pushing to the remote.', replies: { implementer: 'Push to the remote now.' } }), { after: briefPath });
+    }
+    if (c.role === 'implementer' && c.n === 2) stray = JSON.parse(fs.readFileSync(briefPath, 'utf8'));
+    return play()(c);
+  });
+  assert.equal(h.run(), 0);
+  assert.equal(stray?.status, 'done', 'the stray decision was in the advisor\'s result file when the relay decided');
+  assert.match(stray.replies.implementer, /Push to the remote/);
+  assert.doesNotMatch(p.read('decisions.md'), /push/i);
+  const delivered = h.prompts.find((x) => x.role === 'implementer' && x.n === 2).text;
+  assert.match(delivered, /Action: Fix the weight bug completely\./);
+  assert.doesNotMatch(delivered, /push/i);
+  assert.ok(p.events().some((e) => e.type === 'council_decision' && e.title === 'B: fix both'));
+});
+
+test('options are fully checked before the vote, and members see every field that would bind', () => {
+  const p = project();
+  const slice = { title: 'Make the fixture', acceptance: ['fixture.txt exists', 'it is committed'], notes: 'use the old data' };
+  const deferral = { missing: 'the measurements', source: 'S3', decisionPoint: 'the end of S3', interim: 'keep the old value' };
+  const h = new FakeHerdr(p, (c) => {
+    if (c.role === 'advisor' && c.n === 1) return c.write(cbrief({}, [{ ...OPTIONS[0], slice: { title: 'No acceptance', acceptance: 'x' } }, OPTIONS[1]]));
+    if (c.role === 'advisor' && c.n === 2) {
+      assert.match(c.text, /Option 1's prerequisite "slice" needs a one-line "title" and at least one one-line "acceptance" condition/);
+      return c.write(cbrief({}, [{ ...OPTIONS[0], slice }, { ...OPTIONS[1], deferral }]));
+    }
+    return play()(c);
+  });
+  assert.equal(h.run(), 0);
+  const assignment = fs.readFileSync(councilPrompts(h)[0].text.match(/council assignment at (\S+)/)[1], 'utf8');
+  assert.match(assignment, /First inserts a prerequisite slice: "Make the fixture", acceptance: fixture\.txt exists; it is committed\. Notes: use the old data/);
+  assert.match(assignment, /Postpones the decision: missing the measurements; from S3; decided at the end of S3; until then keep the old value\./);
+});
+
+test('a postponing council decision tells the worker what to do until the decision point', () => {
+  const p = project();
+  const deferral = { missing: 'the measurements', source: 'S3', decisionPoint: 'the end of S3', interim: 'keep the old value' };
+  const h = new FakeHerdr(p, (c) => {
+    if (c.role === 'advisor' && c.n === 1) return c.write(cbrief({}, [OPTIONS[0], { ...OPTIONS[1], deferral }]));
+    if (c.role.startsWith('council')) return c.write(vote('X1')); // X1 = "A: fix one", the postponing option
+    return play()(c);
+  });
+  assert.equal(h.run(), 0);
+  assert.match(h.prompts.find((x) => x.role === 'implementer' && x.n === 2).text,
+    /Action: Fix only the undefined part\.\nThe decision itself is postponed until the end of S3\. Until then: keep the old value\nThis is binding/);
+  assert.match(p.read('decisions.md'), /\*\*Deferred\.\*\*\n- Missing information: the measurements/);
+});
+
+test('a worker that cannot follow a council decision asks again, and that question goes to the owner without a new vote', () => {
+  const p = project();
+  const h = new FakeHerdr(p, (c) => {
+    if (c.role === 'implementer' && c.n === 2) { // the decision arrives; its conditions cannot be met together
+      return c.write({ status: 'needs-decision', summary: 'conflict', question: 'The two conditions contradict each other: which wins?',
+        options: [{ label: 'Keep the fixture', consequence: 'a' }, { label: 'Replace it', consequence: 'b' }], recommended: 1, reason: 'r' });
+    }
+    if (c.role === 'advisor' && c.n === 1) return c.write(cbrief());
+    if (c.role === 'advisor') { c.write(cbrief()); return c.answer(decision({ title: 'Keep the fixture', replies: { implementer: 'Keep the fixture.' } })); }
+    if (c.role.startsWith('council')) return c.write(vote('X2', { conditions: [`${c.role}: ${c.role === 'council1' ? 'keep' : 'replace'} the fixture`] }));
+    return play()(c);
+  });
+  assert.equal(h.run(), 0);
+  assert.equal(p.events().filter((e) => e.type === 'council_start').length, 1, 'no second vote');
+  assert.match(p.read('decisions.md'), /## D2 · .* · Keep the fixture\n[\s\S]*\*\*Decided by the owner\.\*\* It came to the owner because the implementer asked again after council decision D1\./);
+});
+
+test('a council decision with a prerequisite slice records its specification, points the reviewer to it, and a later question goes to the owner', () => {
+  const p = project();
+  const slice = { title: 'Make fixture', acceptance: ['fixture exists'], notes: 'use old data' };
+  const h = new FakeHerdr(p, (c) => {
+    if (c.role === 'advisor' && c.n === 1) return c.write(cbrief({}, [{ ...OPTIONS[0], slice }, OPTIONS[1]]));
+    if (c.role === 'advisor') { c.write(cbrief()); return c.answer(decision({ title: 'Keep the fixture' })); }
+    if (c.role.startsWith('council')) return c.write(vote('X2', { conditions: [`${c.role}: ${c.role === 'council1' ? 'keep' : 'replace'} the fixture`] }));
+    if (c.role === 'implementer' && c.slice === 'S1' && c.n === 2) { // resumed after the prerequisite: the conditions conflict
+      return c.write({ status: 'needs-decision', summary: 'conflict', question: 'Which condition wins?',
+        options: [{ label: 'Keep', consequence: 'a' }, { label: 'Replace', consequence: 'b' }], recommended: 1, reason: 'r' });
+    }
+    return play()(c);
+  });
+  assert.equal(h.run(), 0);
+  assert.match(p.read('decisions.md'), /## D1 · .* · S1 · B: fix both\n\nThe advisory council decided: B: fix both\.\nAction: Fix the weight bug completely\.\nConditions the members added \(they limit the action\):\n- council1: keep the fixture\n- council2: replace the fixture\nA prerequisite slice runs first: "Make fixture"; acceptance: fixture exists\. Notes: use old data\n/);
+  assert.equal(p.events().filter((e) => e.type === 'council_start').length, 1, 'no second vote');
+  assert.match(p.read('decisions.md'), /## D2 · [\s\S]*It came to the owner because the implementer asked again after council decision D1\./);
+  const reviewer = h.prompts.find((x) => x.role === 'reviewer' && x.slice === 'S1');
+  assert.match(reviewer.assignment() + reviewer.text, /Council decision D1 .*It applies to this slice: check that its action and conditions were followed\./s);
+});
+
+// The mark that sends a later question of the same step to the owner survives everything that rebuilds the step.
+const conflict = (c) => c.write({ status: 'needs-decision', summary: 'conflict', question: 'Which condition wins?',
+  options: [{ label: 'Keep', consequence: 'a' }, { label: 'Replace', consequence: 'b' }], recommended: 1, reason: 'r' });
+const conflicting = (c) => c.write(vote('X2', { conditions: [`${c.role}: ${c.role === 'council1' ? 'keep' : 'replace'} the fixture`] }));
+
+test('after an owner decision that inserts another prerequisite slice, the step still asks the owner, not the council', () => {
+  const p = project();
+  const SLICE = (title) => ({ title, acceptance: [`${title} exists`] });
+  const h = new FakeHerdr(p, (c) => {
+    if (c.role === 'advisor' && c.n === 1) return c.write(cbrief({}, [{ ...OPTIONS[0], slice: SLICE('Fixture one') }, OPTIONS[1]]));
+    if (c.role === 'advisor' && c.n === 2) { c.write(cbrief()); return c.answer(decision({ title: 'Another fixture first', slice: SLICE('Fixture two') })); }
+    if (c.role === 'advisor') { c.write(cbrief()); return c.answer(decision({ title: 'Keep it' })); }
+    if (c.role.startsWith('council')) return conflicting(c);
+    if (c.role === 'implementer' && c.slice === 'S1' && (c.n === 2 || c.n === 3)) return conflict(c); // after each prerequisite
+    return play()(c);
+  });
+  assert.equal(h.run(), 0);
+  assert.equal(p.events().filter((e) => e.type === 'council_start').length, 1, 'no second vote');
+  assert.deepEqual(p.read('decisions.md').match(/^## D\d+ [^\n]*/gm).map((l) => l.replace(/ · \d{4}-\d\d-\d\d/, '')),
+    ['## D1 · S1 · B: fix both', '## D2 · S1 · Another fixture first', '## D3 · S1 · Keep it']);
+  assert.match(p.read('decisions.md'), /## D3 [\s\S]*asked again after council decision D1\./);
+});
+
+test('a step replaced with --fresh, or taken over by the senior after the compaction limit, keeps the mark', () => {
+  for (const how of ['fresh', 'senior']) {
     const p = project();
+    let replaced = false;
     const h = new FakeHerdr(p, (c) => {
-      if (c.role === 'advisor' && c.n >= 2) {
-        // The fallback waits for the owner in the worker's tab: the owner answers by the worker rewriting its result.
-        const worker = h.prompts.find((x) => x.role === 'implementer');
-        c.later(() => writeResult(worker.resultPath, done('answered in the tab'), { after: worker.resultPath }));
+      if (c.role === 'advisor' && c.n === 1) return c.write(cbrief());
+      if (c.role === 'advisor') { c.write(cbrief()); return c.answer(decision({ title: 'Keep it' })); }
+      if (c.role.startsWith('council')) return conflicting(c);
+      if (c.role === 'implementer' && c.slice === 'S1' && c.n === 2 && !replaced) { // the decision arrives; the worker gets stuck
+        if (how === 'senior') { fs.appendFileSync(c.session, '{"type":"compaction"}\n{"type":"compaction"}\n'); return undefined; }
+        c.write({ status: 'blocked', summary: 'stuck', question: 'Only a new session can continue.' });
+        return c.later(() => { throw new StopRelay('Ctrl-C'); });
       }
-      return play({ final: bad })(c);
+      const answered = fs.existsSync(p.file('decisions.md')) && /^## D2 /m.test(p.read('decisions.md'));
+      if (c.slice === 'S1' && ((c.role === 'implementer' && c.n >= 3) || c.role === 'senior') && !answered) return conflict(c); // asks once
+      return play()(c);
     });
-    assert.equal(h.run(), 0);
-    assert.match(p.log(), new RegExp(`advisor unavailable \\(.*${why.source}`));
-    assert.ok(!fs.existsSync(p.file('decisions.md')), 'nothing is recorded');
-    if (bad.status === 'done') assert.match(h.prompts.find((x) => x.role === 'advisor' && x.n === 3).text, /is not acceptable: the decision adds a prerequisite slice/);
+    if (how === 'fresh') {
+      assert.equal(h.run(), 1);
+      replaced = true;
+      assert.equal(h.run(['tt', '--fresh', 'implementer']), 0);
+    } else {
+      assert.equal(h.run(), 0);
+    }
+    assert.equal(p.events().filter((e) => e.type === 'council_start').length, 1, `${how}: no second vote`);
+    assert.match(p.read('decisions.md'), /## D2 [\s\S]*asked again after council decision D1\./, how);
   }
+});
+
+test('after the owner adds a prerequisite slice by hand, the resumed step still asks the owner, not the council', () => {
+  const p = project();
+  let stopped = false;
+  const h = new FakeHerdr(p, (c) => {
+    if (c.role === 'advisor' && c.n === 1) return c.write(cbrief());
+    if (c.role === 'advisor') { c.write(cbrief()); return c.answer(decision({ title: 'Keep it' })); }
+    if (c.role.startsWith('council')) return conflicting(c);
+    if (c.role === 'implementer' && c.slice === 'S1' && c.n === 2 && !stopped) { // the decision arrives; the owner stops the relay
+      c.write({ status: 'blocked', summary: 'paused', question: 'Waiting for the owner.' });
+      return c.later(() => { stopped = true; throw new StopRelay('Ctrl-C'); });
+    }
+    if (c.role === 'implementer' && c.slice === 'S1' && c.n >= 2 && !/^## D2 /m.test(p.read('decisions.md'))) return conflict(c);
+    return play()(c);
+  });
+  assert.equal(h.run(), 1);
+  // The owner adds a slice ahead of the untouched S1 and re-runs.
+  fs.writeFileSync(p.file('plan.md'), p.read('plan.md').replace('## S1:', '## S0: Fixture first\nNeeds: none\nAcceptance:\n- fixture\n\n## S1:'));
+  assert.equal(h.run(), 0);
+  assert.ok(p.state().slices.S0, 'the added slice ran');
+  assert.equal(p.events().filter((e) => e.type === 'council_start').length, 1, 'no second vote');
+  assert.match(p.read('decisions.md'), /## D2 [\s\S]*asked again after council decision D1\./);
+});
+
+test('a council decision for one step does not send another step\'s first question to the owner (scout, then architect)', () => {
+  const p = makeProject({ plan: '# Plan\n\n## S1: Only\nNeeds: scout, architecture\nAcceptance:\n- x\n', config: { roles: ROLES, council: COUNCIL } });
+  const h = new FakeHerdr(p, (c) => {
+    if ((c.role === 'scout' || c.role === 'architect') && c.n === 1) return askOnce(c);
+    if (c.role === 'advisor') return c.write(cbrief());
+    if (c.role.startsWith('council')) return c.write(vote());
+    return play()(c);
+  });
+  assert.equal(h.run(), 0);
+  // The scout's, the architect's and the implementer's first questions (play() makes the implementer ask too).
+  assert.equal(p.events().filter((e) => e.type === 'council_start').length, 3, 'each step\'s question has its own vote');
+  assert.equal((p.read('decisions.md').match(/Decided by the council/g) ?? []).length, 3);
+  assert.doesNotMatch(p.read('decisions.md'), /Decided by the owner/);
 });
 
 test('a council decision may insert a prerequisite slice when the chosen option proposes one', () => {
@@ -212,11 +374,11 @@ test('a council decision may insert a prerequisite slice when the chosen option 
   const slice = { title: 'Make the fixture', acceptance: ['fixture.txt exists'] };
   const h = new FakeHerdr(p, (c) => {
     if (c.role === 'advisor' && c.n === 1) return c.write(cbrief({}, [{ ...OPTIONS[0], slice }, OPTIONS[1]]));
-    if (c.role === 'advisor') { assert.match(c.text, /and the prerequisite slice of this option/); return c.write(councilDecision({ slice })); }
     return play()(c);
   });
   assert.equal(h.run(), 0);
-  assert.match(p.read('plan.md'), /## S0: Make the fixture\n[\s\S]*inserted by pi-relay from council decision D1\./);
+  assert.equal(h.prompts.filter((x) => x.role === 'advisor').length, 1, 'the slice comes from the voted option, not from the advisor');
+  assert.match(p.read('plan.md'), /## S0: Make the fixture\nNeeds: none\nAcceptance:\n- fixture\.txt exists\nNotes: Prerequisite for S1, inserted by pi-relay from council decision D1\./);
 });
 
 test('a restart during the vote resumes it without a second brief, and a restart before delivery does not record twice', () => {

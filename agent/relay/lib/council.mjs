@@ -7,6 +7,7 @@ import { agentAlive, ensureAgent } from './agents.mjs';
 import { C, clearLive, emit, event, fmtDuration, hhmm, live, log, roleTag, shortModel } from './console.mjs';
 import { quotaGate } from './quota.mjs';
 import { cfg, ctx, herdr, notify, RelayStop, sleep, state, TEMPLATE } from './runtime.mjs';
+import { validSliceSpec } from './steps.mjs';
 import { save } from './store.mjs';
 import { agentTurns, submitPendingInput, wroteSince } from './waiting.mjs';
 
@@ -60,12 +61,16 @@ export function checkCouncilConfig() {
 }
 
 // What the advisor's brief still needs when the council is enabled; null when complete.
+// Every field of an option that would bind if the council chose it must be valid before the vote.
 export function councilBriefProblem(b) {
   const bad = b.brief.options.findIndex((o) => typeof o?.action !== 'string' || !o.action.trim() || !validClasses(o.classes));
   if (bad >= 0) {
     return `The advisory council is enabled: option ${bad + 1} needs "action" (what workers will do, exact and technical) `
       + 'and "classes" (letters from the class table in your assignment).';
   }
+  // (An option's deferral is already checked for every brief, by briefProblem() in advisor.mjs.)
+  const slice = b.brief.options.findIndex((o) => o.slice !== undefined && o.slice !== null && !validSliceSpec(o.slice));
+  if (slice >= 0) return `Option ${slice + 1}'s prerequisite "slice" needs a one-line "title" and at least one one-line "acceptance" condition.`;
   const on = b.brief.ownerNeeded;
   if (on !== undefined && on !== null && (typeof on !== 'string' || !on.trim())) return '"ownerNeeded" must be null or the reason the owner must decide.';
   return null;
@@ -122,8 +127,10 @@ function writeAssignment(role, slice, a, n) {
   const b = a.brief.brief;
   const options = a.council.order.map((i, k) => {
     const o = b.options[i];
+    // Members see every field that binds if both choose this option (the relay records it as written).
     const extra = [o.deferral ? `Postpones the decision: missing ${o.deferral.missing}; from ${o.deferral.source}; decided at ${o.deferral.decisionPoint}; until then ${o.deferral.interim}.` : '',
-      o.slice ? `First inserts a prerequisite slice: ${o.slice.title}.` : ''].filter(Boolean).join(' ');
+      o.slice ? `First inserts a prerequisite slice: "${o.slice.title}", acceptance: ${o.slice.acceptance.join('; ')}.${o.slice.notes ? ` Notes: ${o.slice.notes}` : ''}` : '']
+      .filter(Boolean).join(' ');
     return `- **${a.council.ids[k]}**: ${o.label}. Action: ${o.action}${extra ? ` ${extra}` : ''}`;
   });
   fs.writeFileSync(file, `# Council assignment: ${role} for ${slice.id} — ${slice.title}
@@ -299,6 +306,28 @@ function compare(cn, opts) {
     reasons.push(`the advisor puts the chosen option in class ${owned.join(', ')}, which you keep`);
   }
   return { owner: reasons };
+}
+
+// The council's decision, built by the relay from what both members voted for: the chosen option as the
+// advisor wrote it and the members' conditions. Nothing is rewritten between the vote and the workers.
+export function councilDecision(a, outcome) {
+  const o = a.brief.brief.options[outcome.decided];
+  const conditions = outcome.conditions.map((x) => String(x).trim()).filter(Boolean);
+  const limits = conditions.length ? `\nConditions the members added (they limit the action):\n${conditions.map((x) => `- ${x}`).join('\n')}` : '';
+  const interim = o.deferral ? `\nThe decision itself is postponed until ${o.deferral.decisionPoint}. Until then: ${o.deferral.interim}` : '';
+  const first = o.slice ? `\nA prerequisite slice runs first: "${o.slice.title}"; acceptance: ${o.slice.acceptance.join('; ')}.`
+    + `${o.slice.notes ? ` Notes: ${o.slice.notes}` : ''}` : '';
+  const binding = `Action: ${o.action}${limits}${interim}\nThis is binding: do not change the action. If you cannot satisfy it and its `
+    + 'conditions together, report needs-decision saying why instead of working around it.';
+  const replies = { [a.workerRole]: binding };
+  if (a.workerRole !== 'reviewer') replies.reviewer = 'It applies to this slice: check that its action and conditions were followed.';
+  return {
+    status: 'done', title: o.label, chosen: outcome.decided + 1, replies,
+    // The record: the deferral's fields follow it in their own block (recordDecision()).
+    decision: `The advisory council decided: ${o.label}.\nAction: ${o.action}${limits}${first}`,
+    ...(o.deferral ? { deferral: o.deferral } : {}),
+    ...(o.slice ? { slice: o.slice } : {}),
+  };
 }
 
 // Notes for the owner's brief: why it came to them and what each member proposed, in their plain words.
