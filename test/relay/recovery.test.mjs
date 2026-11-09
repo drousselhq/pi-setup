@@ -119,6 +119,21 @@ test('a worker Herdr fails to start is started on the next run without a false r
   assert.ok(!p.events().some((e) => e.type === 'agent_start_recovered'));
 });
 
+test('an agent name still held by a tab the relay does not know is skipped, not a crash, and that tab is left alone', () => {
+  const p = makeProject({ plan: ONE });
+  const h = new FakeHerdr(p, standard);
+  assert.equal(h.run(), 0);
+  const names = h.starts.map((s) => s.name);
+  // The topic's records are deleted, but the old workers' tabs are still open.
+  for (const n of names) h.agents.get(n).alive = true;
+  fs.rmSync(p.relayDir, { recursive: true });
+  const before = h.starts.length;
+  assert.equal(h.run(), 0);
+  const fresh = h.starts.slice(before).map((s) => s.name);
+  assert.ok(fresh.every((n) => !names.includes(n)), 'new names only');
+  assert.ok(names.every((n) => h.agents.get(n).alive), 'the unknown tabs were not closed');
+});
+
 // ---------- a kill at the save that records a successor ----------
 // (faults-*.test.mjs kill every save of whole scenarios; these name the incident's two cases.)
 

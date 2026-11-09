@@ -41,8 +41,15 @@ export function startAgent(role, resumeSession) {
   const piArgs = ['--model', rc.model, '--thinking', rc.thinking ?? 'medium', '--name', label];
   if (resumeSession) piArgs.push('--session', resumeSession);
   let res;
-  for (let i = 0; i < 30; i++) {
-    res = herdr(['agent', 'start', name, '--kind', 'pi', '--pane', tab.root_pane.pane_id, '--', ...piArgs], { allowFail: true });
+  for (let i = 0, taken = 0; i < 30; i++) {
+    res = herdr(['agent', 'start', agent.name, '--kind', 'pi', '--pane', tab.root_pane.pane_id, '--', ...piArgs], { allowFail: true });
+    // A name still held by an agent this run does not know (a tab left from deleted topic records, say): take the
+    // next number rather than crash; never close or adopt an agent that is not recorded here.
+    if (res.error?.code === 'agent_name_taken' && ++taken <= 20) {
+      agent.name = agentName(role, String(++state.seq).padStart(3, '0'));
+      save();
+      continue;
+    }
     if (res.error?.code !== 'agent_pane_busy') break;
     sleep(1000); // the new shell is not ready yet
   }
@@ -54,9 +61,9 @@ export function startAgent(role, resumeSession) {
   }
   agent.session = res.agent.agent_session?.value ?? null;
   delete agent.starting;
-  state.sessions.push({ slice: state.cur.slice, role, name, session: agent.session, model: rc.model, thinking: rc.thinking });
+  state.sessions.push({ slice: state.cur.slice, role, name: agent.name, session: agent.session, model: rc.model, thinking: rc.thinking });
   save();
-  emit('agent_start', { role, agent: name, model: rc.model, thinking: rc.thinking ?? 'medium', session: agent.session, tab: agent.tab, resumedSession: Boolean(resumeSession) });
+  emit('agent_start', { role, agent: agent.name, model: rc.model, thinking: rc.thinking ?? 'medium', session: agent.session, tab: agent.tab, resumedSession: Boolean(resumeSession) });
   log(`${state.cur.slice} started ${role} (${rc.model} ${rc.thinking ?? 'medium'}) in tab "${label}"${resumeSession ? ' resuming its session' : ''}`, { quiet: true });
   event(C.gray('▸'), `${roleTag(role)} ${C.dim(`started · ${shortModel(rc.model)} ${rc.thinking ?? 'medium'}${resumeSession ? ' · resumed session' : ''} · tab "${label}"`)}`);
   return agent;
