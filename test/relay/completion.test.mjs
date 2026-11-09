@@ -107,6 +107,17 @@ test('a final verification read after a restart is not evidence: it is run once 
   assert.match(verify.text, /the relay did not see the last full verification finish in this run/);
 });
 
+test('a final verification interrupted twice after passing resumes each time, without a stop', () => {
+  const p = makeProject({ plan: ONE });
+  let stops = 2;
+  const h = new FakeHerdr(p, (c) => {
+    if (c.role === 'implementer' && c.slice === 'FINAL' && stops > 0) { stops--; c.write(final()); throw new StopRelay('Ctrl-C'); }
+    return standard(c);
+  });
+  assert.deepEqual([h.run(), h.run(), h.run()], [1, 1, 0]);
+  assert.doesNotMatch(flat(h), /again after one more verification/);
+});
+
 test('files changed after a passing verification get one more verification; changed again, the relay stops naming them', () => {
   const p = makeProject({ plan: ONE });
   let edits = 0;

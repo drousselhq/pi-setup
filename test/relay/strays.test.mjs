@@ -210,3 +210,27 @@ test('a Git failure while a set-aside slice resumes keeps it set aside; a re-run
   assert.equal(h.prompts.filter((c) => c.role === 'acceptance').length, 1, 'its acceptance tests were not written again');
   assert.equal(h.starts.filter((s) => s.role === 'implementer' && s.name.includes('implementer') && s.resumed).length > 0, true, 'the worker resumed its session');
 });
+
+for (const [flags, tag] of [[['--assume-unchanged'], 'h'], [['--skip-worktree'], 'S']]) {
+  test(`with ${flags.join(' ')} set: an edit made during the slice is still uncommitted work, an earlier edit is left alone`, () => {
+    const p = makeProject({ plan: ONE });
+    write(p, 'kept.txt', 'kept\n');
+    write(p, 'later.txt', 'later\n');
+    p.git('add', 'kept.txt', 'later.txt');
+    p.git('commit', '-q', '-m', 'files');
+    for (const rel of ['kept.txt', 'later.txt']) for (const flag of flags) p.git('update-index', flag, rel);
+    write(p, 'kept.txt', 'edited before the slice\n');
+    const h = new FakeHerdr(p, (c) => {
+      if (c.role === 'implementer' && c.slice === 'S1' && c.n === 1) { p.commit('s1.txt'); write(p, 'later.txt', 'slice edit\n'); return c.write(done()); }
+      if (c.role === 'implementer' && c.slice === 'S1' && c.n === 2) {
+        assert.match(c.text, /^These changes are not committed: later\.txt\./);
+        return c.write(done('left later.txt'));
+      }
+      return standard(c);
+    });
+    assert.equal(h.run(), 2);
+    assert.match(flat(h), /still not committed: later\.txt\./);
+    assert.doesNotMatch(flat(h), /kept\.txt/);
+    assert.match(p.git('ls-files', '-v', 'later.txt'), new RegExp(`^${tag} `), 'the real index keeps its flags');
+  });
+}

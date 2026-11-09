@@ -281,8 +281,8 @@ const strayStop = (c, strays) => new RelayStop(`${c.slice}: changes made during 
 
 // ---------- the final verification ----------
 // It ends only on a pass the relay saw in this run, for the candidate as it is now (candidateTree()): a pass
-// read after a restart, or a candidate changed after the pass, gets one more verification; a change after that
-// stops the relay. A failing verification stops it, with the retry queued in the same session.
+// read after a restart is verified again; a candidate changed after the pass (or unreadable through Git) gets one
+// more verification, and the same again stops the relay. A failing verification stops it, with the retry queued in the same session.
 
 function finalResult(c, p, r) {
   if (r.verification === 'fail') {
@@ -308,17 +308,22 @@ function finishFinal(c, tree) {
   const seen = c.verified?.run === RUN_ID ? c.verified : null;
   if (tree && seen?.tree === tree) return finishSlice({ tree });
   const changed = seen && tree ? git(['diff', '--name-only', seen.tree, tree]) : null;
+  // A restart is not a cause to investigate: verifying again after one is bounded (once per run) and never uses
+  // the one more verification that a changed candidate or a Git failure gets before the relay stops.
+  const restarted = tree && !seen;
   const why = !tree ? 'the relay could not read the candidate\'s files through Git'
-    : changed ? `the candidate changed after the last full verification (${changed.split('\n').join(', ')})`
-      : 'the relay did not see the last full verification finish in this run, so it is not evidence for the current files';
+    : restarted ? 'the relay did not see the last full verification finish in this run, so it is not evidence for the current files'
+      : `the candidate changed after the last full verification${changed ? ` (${changed.split('\n').join(', ')})` : ''}`;
   const step = {
     role: implRole(), purpose: 'verify', initial: false,
     text: `Run the project's full verification again on the current candidate: ${why}. Report it in "verification".`,
   };
+  if (restarted) return queue(step);
   if (!c.reverified) { c.reverified = true; return queue(step); }
   queue(step); // re-running verifies again
-  throw new RelayStop(`FINAL: ${why}, again after one more verification. Find out what changes the files during the final `
-    + `verification, then re-run pi-relay ${ctx.topic}: the same worker verifies again.`);
+  throw new RelayStop(`FINAL: ${why}, again after one more verification. `
+    + (tree ? 'Find out what changes the files during the final verification' : 'Check that Git works in the project')
+    + `, then re-run pi-relay ${ctx.topic}: the same worker verifies again.`);
 }
 
 // Records the slice as done (FINAL with the verified candidate); its workers are released (runSlice() closes

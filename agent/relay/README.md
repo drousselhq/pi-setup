@@ -154,9 +154,9 @@ the terminal. One case needs you: a relay killed during the moment it takes over
   `verification: pass | fail` on every result. The relay announces completion only on a pass it saw in the
   current run, for the files as they are when it finishes (their content, so committing verified work changes
   nothing). A failing verification stops the relay (exit 2): fix the cause or decide, then re-run, and the same
-  worker verifies again. A pass read after a restart, or files changed after the pass (a reviewer that edited,
-  say), get one more verification; changed again, the relay stops naming the files. A slice added to the plan
-  after the final verification runs, and the final verification runs again after it. A completed topic run
+  worker verifies again. A pass read after a restart is verified again; files changed after the pass (a reviewer
+  that edited, say) get one more verification, and changed again, the relay stops naming the files. A slice added
+  to the plan after the final verification runs, and the final verification runs again after it. A completed topic run
   again with the files unchanged reports completion as before; after other changes it says which state its
   verification covered and starts nothing.
 - **A prerequisite slice:** a worker that finds distinct work must come first asks `needs-decision` with an
@@ -207,6 +207,8 @@ One JSON object per line. Every event has `t`, `run` (one ID per relay process),
 | `owner_decision`, `council_decision` | id, title, decision, chosen (the option's number, or null), workerRole, replies (roles), prerequisite (a prerequisite slice's title) |
 | `council_start`, `council_vote`, `council_escalation` | options, members / member, model, choice, classes, confidence, reversibility, ownerNeeded or failed / reasons |
 | `nudge`, `redeliver` | role, purpose, reason |
+| `prompt_resubmitted` | role, attempt (a prompt left unsent in a worker's input box, submitted with Enter) |
+| `runaway` | role, purpose, compactions, turns, interrupted (a step over the compaction limit) |
 | `fresh_session` | role, purpose, setAside, note (`--fresh`) |
 | `acceptance_recorded`, `acceptance_compared` | tests, snapshot / changed, missing (acceptance files, before each review) |
 | `quota_reading`, `quota_pause`, `quota_pause_end` | fiveHour, sevenDay / until, reason / waitedMs |

@@ -92,7 +92,7 @@ function drive(s, k, mode) {
     slices: Object.keys(p.state().slices).sort(),
     // slice:role:purpose of every step, from its result file's name (repairs and re-reviews stay distinct)
     steps: new Set(h.prompts.map((c) => `${c.slice}:${c.role}:${(c.resultPath ?? '').replace(/^.*\/\d+-[a-z0-9]+-|\.result\.json$/g, '')}`)),
-    delivered: new Set(delivered(h)),
+    delivered: delivered(h).reduce((n, d) => n.set(d, (n.get(d) ?? 0) + 1), new Map()), // how often each was received
     sessions: Object.fromEntries(Object.entries(sessions).map(([k, v]) => [k, v.size])),
     advise: h.prompts.filter((c) => c.role === 'advisor' && c.text.startsWith('/advise')).length,
     open: [...h.agents.entries()].filter(([, a]) => a.alive).map(([n]) => n),
@@ -118,7 +118,8 @@ export function sweep(s) {
       assert.deepEqual(got.slices, ref.slices, `${at}: every slice done`);
       assert.equal(got.decisions, ref.decisions, `${at}: each decision recorded once, with its full text`);
       for (const step of ref.steps) assert.ok(got.steps.has(step), `${at}: ${step} ran`);
-      for (const d of ref.delivered) assert.ok(got.delivered.has(d), `${at}: delivered verbatim: ${d}`);
+      for (const d of ref.delivered.keys()) assert.ok(got.delivered.has(d), `${at}: delivered verbatim: ${d}`);
+      for (const [d, n] of got.delivered) assert.ok(n <= (ref.delivered.get(d) ?? 0), `${at}: delivered ${n} times, not more than uninterrupted: ${d}`);
       for (const [who, n] of Object.entries(ref.sessions)) {
         assert.ok((got.sessions[who] ?? 0) <= n, `${at}: ${who} kept its session(s) (${got.sessions[who]} > ${n})`);
       }

@@ -195,28 +195,29 @@ function tabExcerpt(t) {
 export const agentTurns = (agent) => sessionTotals(agent.session)?.turns ?? 0;
 
 // Prompts at least once without typing the prompt twice. holder[key] records the attempt (agent, its turns,
-// the text, the result file it asks for) before the prompt and is cleared once Herdr accepted it.
+// the text, the result file it asks for) before the prompt and is cleared once Herdr accepted it, or, with keep,
+// left for the caller to clear in the same save that records what the prompt achieved.
 // resumePrompt() finishes an attempt a killed relay left: if the result file was written since, or the same
 // agent has worked since, it was received; the same agent that has not may hold it unsent in its input box
 // (Enter); otherwise it is sent again.
-export function promptOnce(agent, holder, key, text, expect) {
+export function promptOnce(agent, holder, key, text, expect, { keep = false } = {}) {
   holder[key] = { agent: agent.name, turns: agentTurns(agent), text, expect, at: Date.now() };
   save();
   const status = prompt(agent, text);
-  holder[key] = null;
-  save();
+  if (!keep) { holder[key] = null; save(); }
   return status;
 }
 
-export function resumePrompt(agent, holder, key) {
+export function resumePrompt(agent, holder, key, { keep = false } = {}) {
   const was = holder[key];
   if (!was) return null;
-  if (wroteSince(was.expect, was.at)) { holder[key] = null; save(); return 'idle'; }
+  const received = (status) => { if (!keep) { holder[key] = null; save(); } return status; };
+  if (wroteSince(was.expect, was.at)) return received('idle');
   if (was.agent === agent.name) {
     const status = agentTurns(agent) > was.turns ? 'working' : submitPendingInput(agent);
-    if (status) { holder[key] = null; save(); return status; }
+    if (status) return received(status);
   }
-  return promptOnce(agent, holder, key, was.text, was.expect);
+  return promptOnce(agent, holder, key, was.text, was.expect, { keep });
 }
 
 // Written after the attempt (no tolerance: the file it asks for may hold the worker's earlier result).

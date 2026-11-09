@@ -268,16 +268,30 @@ function waitForVotes(cn) {
         continue;
       }
       if (m.corrected) { fail(role, m, problem); continue; }
-      m.corrected = true;
-      m.sentAt = Date.now();
-      save();
-      try { herdrPrompt(agent, `${problem} Write it to ${m.votePath} in the format your assignment gives.`); } catch (e) { fail(role, m, e.message); }
+      try { correct(m, agent, `${problem} Write it to ${m.votePath} in the format your assignment gives.`); } catch (e) { fail(role, m, e.message); }
     }
     if (Object.values(cn.members).some((m) => !m.vote && !m.failed)) {
       live(`  ${C.gray(hhmm())}  ${C.cyan('\u25f7')} ${roleTag('council')} ${C.dim(`voting \u00b7 ${fmtDuration(Date.now() - started)}`)}`);
       sleep(10000);
     }
   }
+}
+
+// The one correction, delivered at least once and never twice, as the first prompt is: the attempt is saved before
+// it is typed, and after a restart a member that worked or wrote its vote since the attempt got it.
+function correct(m, agent, text) {
+  const c = m.correcting;
+  const got = c && (wroteSince(m.votePath, c.at)
+    || (c.agent === agent.name && (agentTurns(agent) > c.turns || submitPendingInput(agent))));
+  if (!got) {
+    m.correcting = { agent: agent.name, turns: agentTurns(agent), at: Date.now(), text: c?.text ?? text };
+    save();
+    herdrPrompt(agent, m.correcting.text);
+  }
+  m.corrected = true;
+  m.sentAt = m.correcting.at;
+  m.correcting = null;
+  save();
 }
 
 function readVote(file, since) {

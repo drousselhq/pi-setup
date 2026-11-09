@@ -99,12 +99,13 @@ export function consultAdvisor(worker, p, r) {
     event(C.yellow('\u26a0'), `${roleTag('advisor')} ${C.yellow(what)} ${C.dim(`\u00b7 ${why}; asking you directly`)}`);
     releaseAgent('advisor');
     for (const role of Object.keys(c.advice?.council?.members ?? {})) releaseAgent(role);
-    c.advice = null;
+    c.advice = { workerMtime: r._mtime, fallback: true }; // a restart asks the owner directly again, not the advisor
     save();
     closeTabs();
     return false;
   };
   let a = c.advice?.workerMtime === r._mtime ? c.advice : null; // resume an advice already under way for this question
+  if (a?.fallback) return false;
   if (!a) {
     releaseAgent('advisor');
     const blocked = prerequisiteBlocked(slice);
@@ -259,16 +260,18 @@ function deliver(worker, p, a, slice) {
   }
   const reply = final.replies?.[worker.role] ?? final.decision;
   // The worker's question stays readable until the decision has reached it (p.sentAt moves only below), so a
-  // restart in between finds the question, resumes this advice and finishes the delivery attempt.
+  // restart in between finds the question, resumes this advice and finishes the delivery attempt. The attempt is
+  // kept until the save below, which consumes the question with it: a restart before then sees whether the
+  // worker got it, and never types it twice.
   const at = a.delivering?.at ?? Date.now();
-  if (!resumePrompt(worker, a, 'delivering')) {
+  if (!resumePrompt(worker, a, 'delivering', { keep: true })) {
     event(C.cyan('\u2192'), `${roleTag(worker.role)} ${C.dim(`decision ${id} delivered`)}`);
     promptOnce(worker, a, 'delivering', `${label} (recorded in ${ctx.decisions}):\n\n${reply}\n\nContinue your current step. `
-      + `Write this step's result JSON (same format) to: ${p.resultPath}`, p.resultPath);
+      + `Write this step's result JSON (same format) to: ${p.resultPath}`, p.resultPath, { keep: true });
   }
   p.sentAt = at;
   p.answered = a.workerMtime; // that version of the result file is the question just answered, never a new one
-  c.advice = null; // only now: a restart before this point delivers the recorded decision again
+  c.advice = null; // only now, with the delivery attempt: a restart before this point resumes it
   save();
   return true;
 }

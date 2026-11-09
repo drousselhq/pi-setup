@@ -30,12 +30,50 @@ export function hashPath(h, rel) {
 }
 
 // The paths that differ from HEAD (staged or not) and the untracked ones, outside .agents_work/, sorted;
-// null when Git cannot list them.
+// null when Git cannot list them. Files Git is told to skip (assume-unchanged, skip-worktree) are compared too.
 export function changedPaths(head = git(['rev-parse', '--verify', '--quiet', 'HEAD'])) {
-  const changed = head ? git(['diff', 'HEAD', '--name-only', '--no-renames', '-z', ...OUTSIDE_RECORDS]) : git(['ls-files', '-z', ...OUTSIDE_RECORDS]);
-  const untracked = git(['ls-files', '-o', '--exclude-standard', '-z', ...OUTSIDE_RECORDS]);
-  if (changed === null || untracked === null) return null;
-  return [...new Set(`${changed}\0${untracked}`.split('\0').filter(Boolean))].sort();
+  const list = (env) => {
+    const changed = head ? git(['diff', 'HEAD', '--name-only', '--no-renames', '-z', ...OUTSIDE_RECORDS], env)
+      : git(['ls-files', '-z', ...OUTSIDE_RECORDS], env);
+    const untracked = git(['ls-files', '-o', '--exclude-standard', '-z', ...OUTSIDE_RECORDS], env);
+    if (changed === null || untracked === null) return null;
+    return [...new Set(`${changed}\0${untracked}`.split('\0').filter(Boolean))].sort();
+  };
+  const flagged = flaggedPaths();
+  if (flagged === null) return null;
+  return flagged.length ? withFullIndex(flagged, list) : list();
+}
+
+// Tracked paths whose content Git is told to skip: assume-unchanged (lower-case tag) or skip-worktree (S); null when
+// Git cannot list them.
+function flaggedPaths(env) {
+  const listed = git(['ls-files', '-v', '-z'], env);
+  return listed === null ? null : listed.split('\0').filter((e) => /^[a-zS] /.test(e)).map((e) => e.slice(2));
+}
+
+// Calls fn(env) with a temporary copy of the index in which the flags of the given paths are cleared, so Git
+// compares their content; the real index is untouched. The copy lives in .git, outside the working tree (adding the
+// working tree never takes it), one per process. Null when Git fails.
+function withFullIndex(flagged, fn) {
+  const temp = git(['rev-parse', '--git-path', `pi-relay-candidate-${io.pid}.index`]);
+  const real = git(['rev-parse', '--git-path', 'index']);
+  if (temp === null) return null;
+  const index = path.resolve(ctx.project, temp);
+  try {
+    const realIndex = real === null ? null : path.resolve(ctx.project, real);
+    if (realIndex && fs.existsSync(realIndex)) fs.copyFileSync(realIndex, index);
+    else fs.rmSync(index, { force: true });
+    const env = { GIT_INDEX_FILE: index };
+    // One flag per command: given both, Git clears only assume-unchanged.
+    for (const flag of ['--no-assume-unchanged', '--no-skip-worktree']) {
+      for (let i = 0; i < flagged.length; i += 200) {
+        if (git(['update-index', flag, '--', ...flagged.slice(i, i + 200)], env) === null) return null;
+      }
+    }
+    return fn(env);
+  } finally {
+    fs.rmSync(index, { force: true });
+  }
 }
 
 // One file's content digest ('unreadable' when it cannot be read).
@@ -97,35 +135,17 @@ export function sliceChanged() {
 
 // The candidate as content, for the final verification: the Git tree of the working tree's tracked and untracked,
 // non-ignored files outside .agents_work/ (taken out explicitly: projects need not ignore it), built in a temporary
-// copy of the index (unchanged files are not read again; flags that make Git skip a file's content, assume-
-// unchanged and skip-worktree, are cleared in the copy). Committing verified content leaves it unchanged; any
-// content change alters it. Null when Git cannot build it.
+// copy of the index with the skip flags cleared (unchanged files are not read again, but every changed or untracked
+// file is stored in .git/objects as an unreferenced object, which Git's garbage collection removes). Committing
+// verified content leaves it unchanged; any content change alters it. Null when Git cannot build it.
 export function candidateTree() {
-  // In .git, outside the working tree (adding the working tree never takes the index file itself), one per process.
-  const temp = git(['rev-parse', '--git-path', `pi-relay-candidate-${io.pid}.index`]);
-  const real = git(['rev-parse', '--git-path', 'index']);
-  if (temp === null) return null;
-  const index = path.resolve(ctx.project, temp);
-  try {
-    const realIndex = real === null ? null : path.resolve(ctx.project, real);
-    if (realIndex && fs.existsSync(realIndex)) fs.copyFileSync(realIndex, index);
-    else fs.rmSync(index, { force: true });
-    const env = { GIT_INDEX_FILE: index };
-    const listed = git(['ls-files', '-v', '-z'], env);
-    if (listed === null) return null;
-    const flagged = listed.split('\0').filter((e) => /^[a-zS] /.test(e)).map((e) => e.slice(2));
-    // One flag per command: given both, Git clears only assume-unchanged.
-    for (const flag of ['--no-assume-unchanged', '--no-skip-worktree']) {
-      for (let i = 0; i < flagged.length; i += 200) {
-        if (git(['update-index', flag, '--', ...flagged.slice(i, i + 200)], env) === null) return null;
-      }
-    }
+  const flagged = flaggedPaths();
+  if (flagged === null) return null;
+  return withFullIndex(flagged, (env) => {
     // .agents_work/ is taken out of the temporary index rather than excluded by pathspec: Git refuses a pathspec
     // that names an ignored path, and projects may or may not ignore it.
     if (git(['add', '-A'], env) === null) return null;
     if (git(['rm', '-r', '-q', '--cached', '--ignore-unmatch', '--', '.agents_work'], env) === null) return null;
     return git(['write-tree'], env);
-  } finally {
-    fs.rmSync(index, { force: true });
-  }
+  });
 }

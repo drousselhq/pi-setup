@@ -275,3 +275,24 @@ test('a kill after a tab answer was written, before its mark was saved, does not
   assert.equal(h.run(), 0);
   assert.equal(tabAnswers(p).length, 1, 'recorded once');
 });
+
+test('after the advisor failed and the owner is asked in the worker\'s tab, a restart does not consult the advisor again', () => {
+  const p = makeProject({ plan: '# Plan\n\n## S1: Only\nNeeds: none\nAcceptance:\n- x\n' });
+  let stop = true;
+  const h = new FakeHerdr(p, (c) => {
+    if (c.role === 'implementer' && c.slice === 'S1' && c.n === 1) {
+      return c.write({ status: 'needs-decision', summary: 'a choice', question: 'Which?', options: [{ label: 'A', consequence: 'a' }, { label: 'B', consequence: 'b' }], recommended: 1, reason: 'r' });
+    }
+    if (c.role === 'advisor') { // incomplete, twice; then the relay is stopped while it waits for the owner
+      if (c.n === 2 && stop) c.later(() => { stop = false; throw new StopRelay('Ctrl-C'); });
+      return c.write({ status: 'needs-decision', summary: 'x', brief: { title: 'no question' } });
+    }
+    return standard(c);
+  });
+  assert.equal(h.run(), 1);
+  const advised = h.prompts.filter((c) => c.role === 'advisor').length;
+  const worker = h.prompts.find((c) => c.role === 'implementer');
+  h.pending.push(() => writeResult(worker.resultPath, done('answered in the tab'), { after: worker.resultPath }));
+  assert.equal(h.run(), 0);
+  assert.equal(h.prompts.filter((c) => c.role === 'advisor').length, advised, 'the advisor is not asked again');
+});
