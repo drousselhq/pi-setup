@@ -45,7 +45,7 @@ export function runSlice(slice) {
     let r;
     if (state.cur.pending) r = collect();
     else if (state.cur.queued) r = send(state.cur.queued);
-    else throw new RelayStop(`${state.cur.slice} has no next step recorded; inspect relay/state.json.`);
+    else throw new RelayStop(`${state.cur.slice} has no next step recorded, which should not happen: please report it, keeping relay/ as it is.`);
     if (r?.status === 'set-aside') break; // the prerequisite slice is next in plan.md
     transition(r);
     save();

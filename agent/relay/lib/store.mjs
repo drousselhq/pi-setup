@@ -138,5 +138,3 @@ function removeOrphanGuard(guard) {
   if (g.text === null) return;
   if (g.pid ? !io.processAlive(g.pid) : g.age >= YOUNG_GUARD_MS) fs.rmSync(guard, { force: true });
 }
-
-// ---------- plan ----------

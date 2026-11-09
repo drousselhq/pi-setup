@@ -56,7 +56,10 @@ a project's tracker, tooling or workflow policy belongs in that project's own in
 
 ## Tests
 
-- `npm test` runs every `test/*.test.mjs` with Node's built-in test runner. No dependencies.
+- `npm test` runs `node --test` with Node's default patterns: every `.mjs` under `test/` (`test/install.test.mjs`,
+  `test/relay/*.test.mjs`; the helpers `test/relay/harness.mjs` and `faults.mjs` load too and define no tests), files
+  in parallel. No dependencies. The relay's kill sweeps (`test/relay/faults-*.test.mjs`) make it
+  take a few minutes.
 - Tests are deterministic. They use temporary directories and the relay test harness's fake Herdr; they
   never touch `~/.pi`, the checkout's tracked files, the network or a real Herdr.
 - Test behaviour, not lines: success, invalid input, boundaries, restart and failure paths. Do not add

@@ -6,7 +6,7 @@ import path from 'node:path';
 import { appendToDecisions } from './advisor.mjs';
 import { agentAlive } from './agents.mjs';
 import { C, callout, clearLive, compactionText, emit, event, fmtDuration, hhmm, live, log, roleTag } from './console.mjs';
-import { cfg, ctx, herdr, HUMAN_STATUSES, io, notify, plural, RelayStop, sleep, state } from './runtime.mjs';
+import { compactionLimit, ctx, herdr, HUMAN_STATUSES, io, notify, plural, RelayStop, sleep, state } from './runtime.mjs';
 import { readResult } from './steps.mjs';
 import { save } from './store.mjs';
 import { sessionTotals, stepUsage } from './usage.mjs';
@@ -31,7 +31,7 @@ export function settle(agent, status) {
       const pending = state.cur?.pending;
       const p = pending && pending.role === agent.role ? pending : null;
       const u = p ? stepUsage(p) : null;
-      const limit = cfg.maxCompactionsPerStep ?? 3;
+      const limit = compactionLimit();
       if (u && limit > 0 && u.compactions >= limit && !p.runaway) {
         interruptRunaway(agent, p, u);
         status = 'working';
@@ -304,7 +304,7 @@ export function waitForOperator(agent, r, { show = showQuestion, track = true, d
     }
     if (!answered) continue;
     const u = track && p ? stepUsage(p) : null;
-    const limit = cfg.maxCompactionsPerStep ?? 3;
+    const limit = compactionLimit();
     if (status === 'working' && u && limit > 0 && u.compactions >= limit && !p.runaway) {
       interruptRunaway(agent, p, u);
       return null;

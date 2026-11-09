@@ -93,3 +93,10 @@ test('the advisor\'s assignment states no compaction limit: the relay never appl
   assert.doesNotMatch(advisor.assignment(), /compacts/);
   assert.match(h.prompts.find((c) => c.role === 'implementer').assignment().replace(/\s+/g, ' '), /compacts 2 times/);
 });
+
+test('without maxCompactionsPerStep in the configuration, the compaction limit is 2', () => {
+  const p = makeProject({ plan: ONE, config: { maxCompactionsPerStep: undefined } });
+  const h = new FakeHerdr(p, standard);
+  assert.equal(h.run(), 0);
+  assert.match(h.prompts[0].assignment().replace(/\s+/g, ' '), /compacts 2 times/);
+});

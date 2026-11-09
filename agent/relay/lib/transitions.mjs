@@ -5,7 +5,7 @@ import { releaseAgent, releaseAll } from './agents.mjs';
 import { candidateTree, sliceChanged, strayChanges } from './changes.mjs';
 import { C, compactionText, emit, event, fmtDuration, GUTTER, log, out, resultIcon, resultLabel, roleTag, shortModel } from './console.mjs';
 import { checkPlan, FINAL_SLICE, parsePlan, PLAN_FORMAT, PLAN_SLICE, progress, progressText } from './plan.mjs';
-import { cfg, ctx, git, HELP_STATUSES, now, plural, RelayStop, RUN_ID, state } from './runtime.mjs';
+import { cfg, compactionLimit, ctx, git, HELP_STATUSES, now, plural, RelayStop, RUN_ID, state } from './runtime.mjs';
 import { artifactPath, queue } from './steps.mjs';
 import { save } from './store.mjs';
 import { stepUsage } from './usage.mjs';
@@ -15,7 +15,7 @@ export function currentSlice() {
   if (id === 'PLAN') return PLAN_SLICE;
   if (id === 'FINAL') return FINAL_SLICE;
   const s = parsePlan().find((x) => x.id === id);
-  if (!s) throw new RelayStop(`Slice ${id} disappeared from plan.md. Restore it or remove relay/state.json "cur".`);
+  if (!s) throw new RelayStop(`Slice ${id} disappeared from plan.md. Restore it under the same ID, then re-run pi-relay ${ctx.topic}.`);
   return s;
 }
 
@@ -124,7 +124,7 @@ export function stopOnRunaway(p, r, slice) {
         + 'step can move to a new slice after it in plan.md, but this slice must still meet its acceptance conditions.'
       : ` If the slice is too big, split it in plan.md first (${slice.id} has no commits or changes yet).`;
   throw new RelayStop(`${slice.id}: the ${p.role} was interrupted after ${p.runaway.compactions} compactions in one step `
-    + `(limit ${cfg.maxCompactionsPerStep ?? 3}). The step is probably too big, or the worker is going in circles. Its partial work `
+    + `(limit ${compactionLimit()}). The step is probably too big, or the worker is going in circles. Its partial work `
     + `is in the working tree and its session file is kept. Re-running pi-relay ${ctx.topic} retries this step in a fresh session `
     + `that continues from that work. To steer the retry instead, use ${fresh}`
     + (p.role === 'reviewer' ? ' (the partial review record is then set aside and the new reviewer reviews in full)' : '')
@@ -360,5 +360,3 @@ export function finishSlice(extra = {}) {
   state.cur = null;
   save();
 }
-
-// ---------- main loop ----------

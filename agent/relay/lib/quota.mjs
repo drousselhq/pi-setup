@@ -1,9 +1,11 @@
-// pi-relay: Quota pacing for Anthropic subscription roles.
+// pi-relay: Quota pacing for Anthropic subscription roles. Gates each worker step: waits for the 5h window to
+// reset when it is nearly used, and keeps weekly usage at or below an even pace across the week (plus a margin).
+// Pacing is a ceiling: unused days accumulate. Running steps are never interrupted.
 
 import fs from 'node:fs';
 import path from 'node:path';
 import { C, callout, emit, event, log } from './console.mjs';
-import { cfg, ctx, io, notify, now, RELAY_HOME, sleep } from './runtime.mjs';
+import { cfg, ctx, io, notify, RELAY_HOME, sleep } from './runtime.mjs';
 
 export const WEEK_MS = 7 * 24 * 3600 * 1000;
 
@@ -100,5 +102,3 @@ export function quotaGate(role) {
     usageCache.at = 0; // re-read after sleeping
   }
 }
-
-// ---------- context, config, state ----------

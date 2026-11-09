@@ -126,6 +126,3 @@ export function closeAgent(role) {
   save();
   closeTabs();
 }
-
-
-// ---------- assignments and messages ----------

@@ -125,9 +125,24 @@ the terminal. One case needs you: a relay killed during the moment it takes over
   with your note. A fresh reviewer does a full, independent review: the previous review record is set aside in
   `relay/NNN-reviewer-replaced-review.md`, kept for you, and not given to it. Other roles keep their record. It
   applies only to the worker the relay is waiting for, or to the step retried after a compaction-limit stop.
-- **Stops (exit code 2):** a repair-cycle limit, the scout/architect request limit, or a missing
-  plan. Read the message in `relay/log.md`, adjust `plan.md`/`handoff.md` if needed, then run `pi-relay <topic>` again.
-  Re-running after a limit stop allows that many more cycles or requests.
+- **Stops (exit code 2):** the relay stops for you, saying why in the terminal and, once it holds the topic's
+  lock, in `relay/log.md`, when:
+  - a limit is reached: repair cycles, scout/architect requests, or the compaction limit (for the implementer only
+    when escalation is off);
+  - the plan cannot be used: no handoff or plan, a malformed `plan.md`, a duplicated or vanished slice;
+  - a prerequisite slice cannot be added (the slice has changes, planning, no free id), or `plan.md` now puts
+    a new slice before one with changes;
+  - the final verification failed, or the files changed again after one more verification;
+  - changes made during a slice are still uncommitted, or Git cannot list the changes;
+  - another relay holds the topic's lock, or one is taking it over, or a guard needs deleting;
+  - a configuration or command-line problem: a missing model, an invalid council, a bad `--fresh` or option, or
+    starting it outside a Herdr pane;
+  - a worker's tab was closed while it waited for you, or its agent was lost or never started;
+  - the saved state names no next step for the current slice: a relay bug, so report it and keep `relay/` as it is.
+
+  Read the message, fix what it names (`plan.md`, `handoff.md`, Git, the lock), then run `pi-relay <topic>`
+  again: it resumes. Re-running after a limit stop allows that many more cycles or requests. Exit code 1 is an
+  unexpected error (a bug or a failed effect such as a full disk); 0 is complete, or nothing to do.
 - **Uncommitted work** (with `commit: true`): changes made during a slice must be committed by its worker. When a
   worker reports done while some remain, it is asked once (each time it reports done with leftovers) to commit
   those that belong to the slice and to leave the rest alone; if changes are still left, the relay stops (exit 2)

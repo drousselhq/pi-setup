@@ -61,8 +61,7 @@ export function notify(title, body) {
   io.notify(title, body);
 }
 
-// ---------- console output ----------
-// The console is for a human watching the run; relay/log.md keeps the same events as plain text.
+// ---------- shared state and small helpers ----------
 
 export const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
@@ -73,6 +72,9 @@ export let cfg;
 export let state;
 
 export function setCfg(value) { cfg = value; }
+
+// Compactions allowed in one step before the relay interrupts it (config.json maxCompactionsPerStep; 0: no limit).
+export const compactionLimit = () => cfg.maxCompactionsPerStep ?? 2;
 
 export function setState(value) { state = value; }
 

@@ -8,7 +8,7 @@ import { agentAlive, ensureAgent } from './agents.mjs';
 import { moveAside } from './fresh.mjs';
 import { C, emit, event, log, purposeLabel, roleTag } from './console.mjs';
 import { quotaGate } from './quota.mjs';
-import { cfg, ctx, HUMAN_STATUSES, plural, state, STATUSES, TEMPLATE } from './runtime.mjs';
+import { cfg, compactionLimit, ctx, HUMAN_STATUSES, plural, state, STATUSES, TEMPLATE } from './runtime.mjs';
 import { save } from './store.mjs';
 import { currentSlice } from './transitions.mjs';
 import { sessionTotals, stepUsage } from './usage.mjs';
@@ -134,7 +134,7 @@ Allowed statuses for your role: ${statuses}.
 
 // The compaction limit, so a worker can see a step growing too large before the relay interrupts it.
 function compactionRule() {
-  const limit = cfg.maxCompactionsPerStep ?? 3;
+  const limit = compactionLimit();
   return limit > 0 ? `\n- The relay interrupts a step whose session compacts ${limit === 1 ? 'once' : `${limit} times`}. A step that large `
     + 'belongs in its own slice: if yours is heading there, say so (`needs-decision`) instead of pushing on.' : '';
 }
@@ -146,7 +146,7 @@ export function resultPathFor(role, purpose) {
 // A message is { role, purpose, text, initial } where `initial` messages create a new assignment.
 export function queue(msg) { state.cur.queued = msg; save(); }
 
-// ---------- delivery and waiting ----------
+// ---------- result files and delivery ----------
 
 export function readResult(file, since) {
   if (!fs.existsSync(file)) return null;
@@ -247,10 +247,8 @@ export function send(msg) {
   return collect();
 }
 
-// ---------- advisor: plain-language decisions for the owner ----------
-// A worker's needs-decision goes to a fresh advisor session, which writes a brief (options and a
-// recommendation in plain words), takes the owner's answer in its own tab, and writes the decision
-// plus replies. The relay records the decision in decisions.md and delivers the replies.
+// ---------- collecting a step's result ----------
+// A needs-decision goes to the advisor (advisor.mjs); a blocked worker waits for the owner (waiting.mjs).
 
 // Finish the pending exchange: wait, nudge once for a missing result, involve the operator when asked.
 // Also used on resume, when the agent may have died or never received the message.
@@ -322,7 +320,7 @@ export function collect() {
     if (valid(p.role, r)) return r;
     // Over the compaction limit and stopped without a result: same as a runaway, no reminder.
     const used = stepUsage(p);
-    const limit = cfg.maxCompactionsPerStep ?? 3;
+    const limit = compactionLimit();
     if (!r && used && limit > 0 && used.compactions >= limit) {
       markRunaway(agent, p, used, false);
       return { status: 'runaway', summary: `Stopped after ${plural(used.compactions, 'compaction')} and ${plural(used.turns, 'turn')} in one step.` };
@@ -358,5 +356,3 @@ export function collect() {
       + 'Use status "blocked" only if you genuinely cannot continue.'));
   }
 }
-
-// ---------- transitions ----------

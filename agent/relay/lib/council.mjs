@@ -6,7 +6,7 @@ import path from 'node:path';
 import { agentAlive, ensureAgent } from './agents.mjs';
 import { C, clearLive, emit, event, fmtDuration, hhmm, live, log, roleTag, shortModel } from './console.mjs';
 import { quotaGate } from './quota.mjs';
-import { cfg, ctx, herdr, notify, RelayStop, sleep, state, TEMPLATE } from './runtime.mjs';
+import { cfg, ctx, herdr, RelayStop, sleep, state, TEMPLATE } from './runtime.mjs';
 import { validSliceSpec } from './steps.mjs';
 import { save } from './store.mjs';
 import { agentTurns, permissionNotice, submitPendingInput, wroteSince } from './waiting.mjs';

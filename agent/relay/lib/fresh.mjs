@@ -14,7 +14,6 @@ import { closeTabs, releaseAgent } from './agents.mjs';
 import { C, emit, event, log } from './console.mjs';
 import { ctx, RelayStop, state } from './runtime.mjs';
 import { artifactPath, queue } from './steps.mjs';
-import { save } from './store.mjs';
 import { reviewMessage } from './transitions.mjs';
 
 const REPLACEABLE = ['planner', 'scout', 'architect', 'acceptance', 'implementer', 'senior', 'reviewer'];

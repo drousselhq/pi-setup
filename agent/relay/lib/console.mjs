@@ -202,8 +202,3 @@ export function resultLabel(r) {
   if (r.status === 'blocked') return C.red('blocked');
   return C.magenta(r.status.replace('-', ' '));
 }
-
-// ---------- quota pacing (Anthropic subscription) ----------
-// Gates each worker step: waits for the 5h window to reset when it is nearly used, and keeps
-// weekly usage at or below an even pace across the week (plus a margin). Pacing is a ceiling:
-// unused days accumulate. Running steps are never interrupted.

@@ -143,7 +143,7 @@ export const FINAL_SLICE = {
     + 'not weakening; judge each affected requirement separately.',
 };
 
-// ---------- agents ----------
+// ---------- slice order ----------
 
 export function nextSlice() {
   if (!state.slices.PLAN && !fs.existsSync(ctx.plan)) return PLAN_SLICE;
@@ -158,12 +158,6 @@ export function sliceProgress(slice) {
   const pos = slice.id === 'FINAL' ? 'final' : slice.id === 'PLAN' ? 'planning' : `slice ${pr.index(slice.id)}/${pr.slices}`;
   return [pos, pr.criteria ? `acceptance ${pr.criteriaMet}/${pr.criteria}` : null].filter(Boolean).join(' \u00b7 ');
 }
-
-// ---------- prerequisite slices ----------
-// A slice can be set aside while a prerequisite slice runs first: either the owner chose one through the
-// advisor (the relay inserts it into plan.md), or the owner added one to plan.md ahead of the current slice
-// and re-ran the relay. Only an untouched slice (no commits or changes since it started) is set aside. Its
-// state, including its workers' sessions, is kept; afterwards the same workers resume from the new HEAD.
 
 // Static totals for the startup header; on a resumed run, also what is already done.
 export function planSummary(pr) {

@@ -1,4 +1,8 @@
 // pi-relay: Prerequisite slices: inserting them, setting the current slice aside and resuming it.
+// A slice can be set aside while a prerequisite slice runs first: either the owner chose one through the
+// advisor (the relay inserts it into plan.md), or the owner added one to plan.md ahead of the current slice
+// and re-ran the relay. Only an untouched slice (no commits or changes since it started) is set aside. Its
+// state, including its workers' sessions, is kept; afterwards the same workers resume from the new HEAD.
 
 import fs from 'node:fs';
 import { resumeNote } from './acceptance.mjs';
