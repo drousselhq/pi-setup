@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { sliceBaseline } from './changes.mjs';
 import { C, callout, compactionText, emit, heading, log, out, purposeLabel, resetConsole, ROLE_COLOR, roleTag, setTTY, shortModel } from './console.mjs';
+import { closeTabs } from './agents.mjs';
 import { checkCouncilConfig } from './council.mjs';
 import { replaceWorker } from './fresh.mjs';
 import { realIo } from './io.mjs';
@@ -12,7 +13,7 @@ import { resumeSetAside, setAsideForEarlierSlice } from './prerequisites.mjs';
 import { usageCache } from './quota.mjs';
 import { cfg, ctx, git, herdr, io, notify, plural, RelayStop, RUN_ID, setCfg, setIo, setRunId, setState, state } from './runtime.mjs';
 import { collect, queue, send } from './steps.mjs';
-import { acquireLock, save, setup } from './store.mjs';
+import { acquireLock, loadState, save, setup } from './store.mjs';
 import { currentSlice, firstMessage, transition } from './transitions.mjs';
 import { sessionCache } from './usage.mjs';
 
@@ -42,6 +43,7 @@ export function runSlice(slice) {
     if (r?.status === 'set-aside') break; // the prerequisite slice is next in plan.md
     transition(r);
     save();
+    closeTabs(); // the workers the transition released
   }
 }
 
@@ -127,6 +129,8 @@ export function main(args) {
   checkCouncilConfig();
   ctx.workspace = herdr(['pane', 'current', '--current']).pane.workspace_id;
   acquireLock();
+  loadState(); // what the previous relay left, read under the lock; nothing is written from the earlier read
+  closeTabs(); // tabs a killed run released but did not close
   save();
   emit('run_start', {
     project: ctx.project, resumed: Boolean(state.cur), head: git(['rev-parse', 'HEAD']),
@@ -174,6 +178,7 @@ export function runRelay(args, ioImpl = realIo) {
     if (ctx.locked) {
       const unrecorded = [];
       try { save(); } catch (err) { unrecorded.push(`state.json (${err.message})`); }
+      try { closeTabs(); } catch { /* listed tabs stay listed and are closed at the next start */ }
       emit('run_stop', { reason: msg.slice(0, 2000), kind: e instanceof RelayStop ? 'stop' : 'error' });
       try { log(`STOPPED: ${msg}`, { quiet: true }); } catch (err) { unrecorded.push(`log.md (${err.message})`); }
       if (unrecorded.length) msg += `\nThis stop could not be recorded in ${unrecorded.join(' or ')}.`;

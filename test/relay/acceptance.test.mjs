@@ -172,7 +172,7 @@ test('any other change still prevents setting a slice with acceptance tests asid
     if (c.role === 'acceptance') return writeTests(c);
     if (c.role === 'implementer' && c.slice === 'S2' && c.n === 1) { write(p, 'started.txt'); return askForPrerequisite(c); }
     if (c.role === 'advisor') {
-      assert.match(c.assignment(), /cannot be inserted before it: do not offer that option/);
+      assert.match(c.assignment(), /A prerequisite slice cannot be added now: S2 already has commits or changes since it started, so it cannot be set aside\. Do not offer that option\./);
       c.write(brief());
       return c.answer(decision({ slice: SLICE }));
     }

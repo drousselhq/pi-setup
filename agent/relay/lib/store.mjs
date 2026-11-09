@@ -32,6 +32,11 @@ export function setup(topic) {
   // The acceptance worker defaults to the topic's resolved reviewer model; set fields override it.
   if (cfg.roles.reviewer) cfg.roles.acceptance = { ...cfg.roles.reviewer, ...cfg.roles.acceptance };
 
+  loadState();
+}
+
+// Reads state.json (again after taking the lock: another relay may have written it meanwhile).
+export function loadState() {
   setState(readJson(ctx.stateFile, { seq: 0, slices: {}, cur: null, sessions: [] }));
   if (state.startStatus === undefined) {
     state.startStatus = git(['status', '--porcelain']) ?? '';
@@ -40,9 +45,15 @@ export function setup(topic) {
 }
 
 export function save() {
-  const tmp = `${ctx.stateFile}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(state, null, 2));
-  fs.renameSync(tmp, ctx.stateFile);
+  writeFileAtomic(ctx.stateFile, JSON.stringify(state, null, 2));
+}
+
+// Files that carry obligations (state, decisions, a relay-inserted plan slice) are replaced whole: a failed
+// write leaves the previous version.
+export function writeFileAtomic(file, content) {
+  const tmp = `${file}.tmp`;
+  fs.writeFileSync(tmp, content);
+  fs.renameSync(tmp, file);
 }
 
 // Only the relay holding the lock writes the topic's state, log and events (see runRelay()). The lock

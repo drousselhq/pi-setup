@@ -36,10 +36,14 @@ The console shows a coloured, live view: a header per slice, each step and resul
 timer while a worker is busy, and highlighted boxes when it needs you. `relay/log.md` records the
 same events as plain text. Set `NO_COLOR=1` for plain console output.
 
-Stopping the script (Ctrl-C) is safe. Re-running it resumes from `relay/state.json`.
-Running workers keep working while the script is stopped. The one exception is a worker the script was
-starting at that moment: the next run closes its tab and starts it again. If a stop cannot be recorded (a
-full disk, for instance), the script still shows its cause in the terminal.
+Stopping the script (Ctrl-C) is safe, and so is the script being killed at any moment. Re-running it resumes
+from `relay/state.json`: every saved state names the next step, a step whose prompt may not have reached its
+worker is checked and delivered again if needed (never typed twice into a worker that started on it), and
+decisions and relay-inserted slices are written whole and only once (their events are not repeated on a
+replay). Running workers keep working while the script is stopped. Two exceptions: a worker the script was
+starting at that moment, and a worker it had just finished with; the next run closes their tabs (the first is
+started again). If a stop cannot be recorded (a full disk, for instance), the script still shows its cause in
+the terminal.
 
 ## When it needs you
 
@@ -118,6 +122,9 @@ full disk, for instance), the script still shows its cause in the terminal.
   resumes the set-aside slice with the same worker sessions, a new base at the current commit and the advisor's
   reply. You can also do it by hand: stop the relay, add the slice to `plan.md` ahead of the current one and re-run.
   Either way only a slice with no commits or changes yet is set aside; otherwise the relay stops and says so.
+  During the final verification, a prerequisite slice chosen before it has changed anything is added after the
+  plan's last slice; the slice runs and the final verification starts again from the beginning. During planning,
+  or once the final verification has changed files, the relay stops with advice instead.
   Its acceptance tests (see "Acceptance tests before the code") do not count as changes: they stay in the
   working tree, and every assignment of the prerequisite slice lists them as not its work. A red or
   non-compiling acceptance test can break that slice's build or test discovery (for example a crate-wide
@@ -146,6 +153,7 @@ One JSON object per line. Every event has `t`, `run` (one ID per relay process),
 |---|---|
 | `run_start` | project, resumed, head, roles (models/thinking), commit, maxRepairCycles, quota, council (when enabled) |
 | `slice_start` / `slice_done` | title, needs, base / head, commits, repairCycles, helpRequests, durationMs |
+| `slice_set_aside` / `slice_resumed` | slice, before, restart (true when the final verification starts again after the slice) / before, base |
 | `agent_start` | role, agent, model, thinking, session (Pi session file), tab, resumedSession |
 | `agent_start_recovered` | role, agent, tab (a worker whose start was interrupted, closed before starting anew) |
 | `step_sent` / `step_result` | role, purpose / status, verdict, blocking, summary, question, checks, durationMs, usage |

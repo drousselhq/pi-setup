@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { test } from 'node:test';
-import { FakeHerdr, StopRelay, accept, brief, decision, done, makeProject, standard, writeResult } from './harness.mjs';
+import { FakeHerdr, StopRelay, TOPIC, accept, brief, decision, done, makeProject, standard, writeResult } from './harness.mjs';
 
 const ONE = '# Plan\n\n## S1: Only\nNeeds: none\nAcceptance:\n- x\n';
 const flat = (h) => h.output.replace(/[┃\s]+/g, ' ');
@@ -35,19 +35,25 @@ function interruptStart(h, p, role, check = () => {}) {
   return () => { assert.ok(seen.disk, 'the start was interrupted'); if (seen.failure) throw seen.failure; };
 }
 
-// The relay process is killed at a save: from the first state save after `when(herdrArgs)` plus `allowed`
-// more, no save reaches the disk in this run. Returns a function that restores the real file system.
-function killAtSave(h, when, allowed) {
-  const real = fs.renameSync;
-  const handle = h.handle.bind(h);
-  let armed = false;
+// The relay process is killed at the first state save whose content satisfies `when` (just before it, or
+// just after it): from then on every file change and every io call fails, as for a process that is gone.
+// Returns a function that restores the real file system.
+// `file` names another file replaced atomically (decisions.md, plan.md): the kill then hits its rename.
+function killAtSave(h, when, mode, file = '/relay/state.json') {
+  const real = Object.fromEntries(['writeFileSync', 'appendFileSync', 'renameSync', 'rmSync', 'unlinkSync', 'mkdirSync'].map((n) => [n, fs[n]]));
   let dead = false;
-  h.handle = (a) => { const r = handle(a); if (when(a)) armed = true; return r; };
+  const alive = () => { if (dead) throw new StopRelay('killed'); };
+  for (const n of Object.keys(real)) fs[n] = (...args) => { alive(); return real[n](...args); };
   fs.renameSync = (from, to) => {
-    if (dead || (armed && String(to).endsWith('state.json') && allowed-- <= 0)) { dead = true; throw new StopRelay('killed'); }
-    return real(from, to);
+    alive();
+    const hit = String(to).endsWith(file) && when(fs.readFileSync(from, 'utf8'));
+    if (hit && mode === 'before') { dead = true; alive(); }
+    real.renameSync(from, to);
+    if (hit && mode === 'after') { dead = true; alive(); }
   };
-  return () => { fs.renameSync = real; h.handle = handle; };
+  const base = h.io();
+  h.ioExtra = { herdr: (a) => { alive(); return h.handle(a); }, sleep: (ms) => { alive(); return base.sleep(ms); }, write: (t) => { alive(); base.write(t); } };
+  return () => { Object.assign(fs, real); h.ioExtra = {}; };
 }
 
 // ---------- interrupted worker starts ----------
@@ -113,31 +119,168 @@ test('a worker Herdr fails to start is started on the next run without a false r
   assert.ok(!p.events().some((e) => e.type === 'agent_start_recovered'));
 });
 
-// ---------- a kill between closing a worker and recording its successor ----------
+// ---------- a kill at the save that records a successor ----------
+// (faults-*.test.mjs kill every save of whole scenarios; these name the incident's two cases.)
 
-test('a kill while an implementer stopped at the compaction limit is handed over still leaves the senior queued', () => {
-  const p = makeProject({ plan: ONE });
-  const h = new FakeHerdr(p, (c) => (c.role === 'implementer' && c.slice === 'S1' && c.n === 1 ? compactTwice(c) : standard(c)));
-  const tab = () => p.state().cur.agents.implementer?.tab;
-  const restore = killAtSave(h, (a) => a[0] === 'tab' && a[1] === 'close' && a[2] === tab(), 1);
-  try { assert.equal(h.run(), 1); } finally { restore(); }
-  assert.equal(p.state().cur.queued.role, 'senior');
+for (const mode of ['before', 'after']) {
+  test(`a kill just ${mode} the save that hands an implementer stopped at the compaction limit to the senior: the senior takes over`, () => {
+    const p = makeProject({ plan: ONE });
+    const h = new FakeHerdr(p, (c) => (c.role === 'implementer' && c.slice === 'S1' && c.n === 1 ? compactTwice(c) : standard(c)));
+    const restore = killAtSave(h, (text) => JSON.parse(text).cur?.queued?.role === 'senior', mode);
+    try { assert.throws(() => h.run(), StopRelay); } finally { restore(); }
+    assert.equal(p.state().cur.queued?.role ?? p.state().cur.pending.role, mode === 'after' ? 'senior' : 'implementer');
+    assert.equal(h.run(), 0);
+    assert.equal(h.starts.filter((s) => s.role === 'implementer').length, 2, 'S1\'s implementer is not restarted (the other is FINAL\'s)');
+    assert.ok(h.prompts.some((c) => c.role === 'senior' && c.slice === 'S1'));
+    assert.ok([...h.agents.values()].every((a) => !a.alive), 'no tab left open');
+  });
+
+  test(`a kill just ${mode} the save that queues a stopped reviewer's retry: the retry runs in a new session`, () => {
+    const p = makeProject({ plan: ONE, config: { escalation: { enabled: false } } });
+    const h = new FakeHerdr(p, (c) => (c.role === 'reviewer' && c.n === 1 ? compactTwice(c) : standard(c)));
+    const restore = killAtSave(h, (text) => JSON.parse(text).cur?.queued?.retryOf === 'runaway', mode);
+    try { assert.throws(() => h.run(), StopRelay); } finally { restore(); }
+    const codes = [h.run()];
+    if (codes[0] === 2) codes.push(h.run()); // killed before the save: the restart stops at the limit again
+    assert.equal(codes.at(-1), 0);
+    const reviewers = h.starts.filter((s) => s.role === 'reviewer');
+    assert.equal(reviewers.length, 2);
+    assert.equal(reviewers[1].resumed, false, 'the closed session is not reused');
+    assert.ok([...h.agents.values()].every((a) => !a.alive), 'no tab left open');
+  });
+}
+
+// ---------- atomic records, delivery, prerequisites outside a plan slice, startup ----------
+
+const TWO = '# Plan\n\n## S1: First\nNeeds: none\nAcceptance:\n- one\n\n## S2: Second\nNeeds: none\nAcceptance:\n- two\n';
+const prerequisite = (title = 'Make the fixture') => decision({ slice: { title, acceptance: ['the fixture exists'] } });
+
+test('a kill inside the atomic rewrite of decisions.md leaves the earlier decisions whole and records the new one once', () => {
+  const p = makeProject({ plan: TWO });
+  const h = new FakeHerdr(p, (c) => {
+    if (c.role === 'implementer' && (c.slice === 'S1' || c.slice === 'S2') && c.n === 1) { p.commit(`${c.slice}-early.txt`); return ask(c); }
+    if (c.role === 'advisor') { c.write(brief()); return c.answer(decision({ title: `Choice for ${c.slice}` })); }
+    return standard(c);
+  });
+  const restore = killAtSave(h, (text) => /## D2 /.test(text), 'before', '/decisions.md');
+  try { assert.throws(() => h.run(), StopRelay); } finally { restore(); }
+  assert.match(p.read('decisions.md'), /## D1 · .* · S1 · Choice for S1\n\nThe owner chose A\./, 'D1 intact');
+  assert.doesNotMatch(p.read('decisions.md'), /## D2/);
   assert.equal(h.run(), 0);
-  assert.equal(h.starts.filter((s) => s.role === 'implementer').length, 2, 'S1\'s closed implementer is not restarted (the other is FINAL\'s)');
-  assert.ok(h.prompts.some((c) => c.role === 'senior' && c.slice === 'S1'));
+  assert.deepEqual(p.read('decisions.md').match(/^## D\d+ /gm), ['## D1 ', '## D2 ']);
 });
 
-test('a kill while a reviewer stopped at the compaction limit is closed still leaves its retry queued', () => {
-  const p = makeProject({ plan: ONE, config: { escalation: { enabled: false } } });
-  const h = new FakeHerdr(p, (c) => (c.role === 'reviewer' && c.n === 1 ? compactTwice(c) : standard(c)));
-  const tab = () => p.state().cur.agents.reviewer?.tab;
-  const restore = killAtSave(h, (a) => a[0] === 'tab' && a[1] === 'close' && a[2] === tab(), 1);
-  try { assert.equal(h.run(), 1); } finally { restore(); }
-  assert.equal(p.state().cur.queued.retryOf, 'runaway');
+test('a kill inside the atomic rewrite of plan.md inserts the prerequisite slice once', () => {
+  const p = makeProject({ plan: TWO });
+  const h = new FakeHerdr(p, (c) => {
+    if (c.role === 'implementer' && c.slice === 'S2' && c.n === 1) return ask(c);
+    if (c.role === 'advisor') { c.write(brief()); return c.answer(prerequisite()); }
+    return standard(c);
+  });
+  const restore = killAtSave(h, (text) => /## S1b:/.test(text), 'before', '/plan.md');
+  try { assert.throws(() => h.run(), StopRelay); } finally { restore(); }
+  assert.doesNotMatch(p.read('plan.md'), /S1b/, 'the plan is the previous version');
   assert.equal(h.run(), 0);
-  const reviewers = h.starts.filter((s) => s.role === 'reviewer');
-  assert.equal(reviewers.length, 2);
-  assert.equal(reviewers[1].resumed, false, 'the closed session is not reused');
+  assert.equal(p.read('plan.md').match(/^## S1b:/gm).length, 1);
+  assert.deepEqual(Object.keys(p.state().slices).sort(), ['FINAL', 'S1', 'S1B', 'S2']);
+});
+
+test('a step that reached its worker just before a kill is not sent again: the worker had started on it', () => {
+  const p = makeProject({ plan: ONE });
+  const h = new FakeHerdr(p, standard);
+  const restore = killAtSave(h, (text) => JSON.parse(text).cur?.pending?.role === 'reviewer' && JSON.parse(text).cur.pending.delivered === true, 'before');
+  try { assert.throws(() => h.run(), StopRelay); } finally { restore(); }
+  assert.equal(h.run(), 0);
+  assert.equal(h.prompts.filter((c) => c.role === 'reviewer').length, 1, 'one review prompt');
+});
+
+test('a step whose prompt never left the relay is delivered after the restart', () => {
+  const p = makeProject({ plan: ONE });
+  const h = new FakeHerdr(p, standard);
+  const restore = killAtSave(h, (text) => JSON.parse(text).cur?.pending?.role === 'reviewer' && JSON.parse(text).cur.pending.delivered === false, 'after');
+  try { assert.throws(() => h.run(), StopRelay); } finally { restore(); }
+  assert.equal(h.prompts.filter((c) => c.role === 'reviewer').length, 0);
+  assert.equal(h.run(), 0);
+  assert.equal(h.prompts.filter((c) => c.role === 'reviewer').length, 1);
+});
+
+test('a brief the owner already answered is not shown again after a kill: his answer is used', () => {
+  const p = makeProject({ plan: ONE });
+  const h = new FakeHerdr(p, (c) => {
+    if (c.role === 'implementer' && c.slice === 'S1' && c.n === 1) return ask(c);
+    if (c.role === 'advisor') { c.write(brief()); return c.answer(decision()); }
+    return standard(c);
+  });
+  const restore = killAtSave(h, (text) => Boolean(JSON.parse(text).cur?.advice?.recording), 'before');
+  try { assert.throws(() => h.run(), StopRelay); } finally { restore(); }
+  const shown = () => p.events().filter((e) => e.type === 'operator_wait_start' && e.role === 'advisor').length;
+  assert.equal(shown(), 1);
+  assert.equal(h.run(), 0);
+  assert.equal(shown(), 1, 'the answered brief was not shown to the owner again');
+  assert.equal(p.read('decisions.md').match(/^## D\d+ /gm).length, 1);
+});
+
+test('a prerequisite slice chosen during planning stops with advice instead of looping', () => {
+  const p = makeProject({ plan: null });
+  const h = new FakeHerdr(p, (c) => {
+    if (c.role === 'planner') return ask(c);
+    if (c.role === 'advisor') { assert.match(c.assignment(), /A prerequisite slice cannot be added now: no plan exists yet/); c.write(brief()); return c.answer(prerequisite()); }
+    return standard(c);
+  });
+  assert.equal(h.run(), 2);
+  assert.match(flat(h), /asks for a prerequisite slice \("Make the fixture"\), but no plan exists yet to insert it into\. Answer the planner in its tab before re-running/);
+  assert.equal(p.state().cur.advice, null);
+  assert.ok(!fs.existsSync(p.file('plan.md')));
+});
+
+test('a prerequisite slice chosen during a final verification that changed files stops with advice', () => {
+  const p = makeProject({ plan: ONE });
+  const h = new FakeHerdr(p, (c) => {
+    if (c.role === 'implementer' && c.slice === 'FINAL') { p.commit('final-fix.txt'); return ask(c); }
+    if (c.role === 'advisor') { c.write(brief()); return c.answer(prerequisite()); }
+    return standard(c);
+  });
+  assert.equal(h.run(), 2);
+  assert.match(flat(h), /but FINAL already has commits or changes since it started, so it cannot be set aside/);
+  assert.doesNotMatch(p.read('plan.md'), /## S1b/);
+});
+
+test('a prerequisite slice chosen during a final verification that changed nothing runs, then the final verification starts again', () => {
+  const p = makeProject({ plan: ONE });
+  const h = new FakeHerdr(p, (c) => {
+    if (c.role === 'implementer' && c.slice === 'FINAL' && c.n === 1) return ask(c);
+    if (c.role === 'advisor') { assert.match(c.assignment(), /a prerequisite slice can be added after the plan's last slice/); c.write(brief()); return c.answer(prerequisite('Add the fixture')); }
+    return standard(c);
+  });
+  assert.equal(h.run(), 0);
+  assert.match(p.read('plan.md'), /## S1b: Add the fixture\nNeeds: none\nAcceptance:\n- the fixture exists\nNotes: Prerequisite for the final verification, inserted by pi-relay from owner decision D1\./);
+  assert.deepEqual(h.prompts.map((c) => `${c.slice}:${c.role}`).slice(-4), ['FINAL:advisor', 'S1B:implementer', 'S1B:reviewer', 'FINAL:implementer']);
+  assert.ok(p.events().some((e) => e.type === 'slice_set_aside' && e.slice === 'FINAL' && e.restart));
+});
+
+test('tabs a killed relay released are closed by the next relay, but not by one the lock refuses', () => {
+  const p = makeProject({ plan: ONE });
+  let reviewing = false; // the reviewer works on its step until the owner stops the relay
+  const h = new FakeHerdr(p, (c) => {
+    if (c.role !== 'reviewer' || reviewing) return standard(c);
+    if (c.n === 1) c.later(() => { throw new StopRelay('Ctrl-C'); });
+    return undefined;
+  });
+  assert.equal(h.run(), 1);
+  reviewing = true;
+  const st = p.state();
+  const reviewer = st.cur.agents.reviewer;
+  st.closingTabs = [{ tab: reviewer.tab, name: reviewer.name, wait: true }]; // as a kill after the release's save leaves it
+  delete st.cur.agents.reviewer;
+  fs.writeFileSync(p.file('relay/state.json'), JSON.stringify(st));
+  fs.writeFileSync(p.file('relay/lock'), '424242');
+  h.ioExtra.processAlive = (pid) => pid === 424242;
+  assert.equal(h.run(), 2, 'refused: another relay holds the lock');
+  assert.equal(h.agents.get(reviewer.name).alive, true, 'the refused relay closed nothing');
+  h.ioExtra = {};
+  fs.rmSync(p.file('relay/lock'));
+  assert.equal(h.run(), 0);
+  assert.equal(h.agents.get(reviewer.name).alive, false);
 });
 
 // ---------- a full disk ----------

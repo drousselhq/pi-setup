@@ -8,6 +8,7 @@ import { C, clearLive, emit, event, fmtDuration, hhmm, live, log, roleTag, short
 import { quotaGate } from './quota.mjs';
 import { cfg, ctx, herdr, notify, RelayStop, sleep, state, TEMPLATE } from './runtime.mjs';
 import { save } from './store.mjs';
+import { agentTurns, submitPendingInput, wroteSince } from './waiting.mjs';
 
 // The decision classes (relay protocol). The owner keeps cfg.council.ownerClasses (default E to I).
 export const CLASSES = {
@@ -197,9 +198,18 @@ export function runCouncil(a, slice) {
       try {
         quotaGate(role);
         const { agent } = ensureAgent(role);
-        m.sentAt = Date.now();
+        // At least once, never twice (see promptOnce()): a member that worked since an attempt got it.
+        // Its vote file counts from the attempt's time, so a vote written before a restart is read.
+        const got = m.prompting && (wroteSince(m.votePath, m.prompting.at)
+          || (m.prompting.agent === agent.name && (agentTurns(agent) > m.prompting.turns || submitPendingInput(agent))));
+        if (!got) {
+          m.prompting = { agent: agent.name, turns: agentTurns(agent), at: Date.now() };
+          save();
+          herdrPrompt(agent, `/council Read and execute the council assignment at ${m.assignment}\n\nVote file: ${m.votePath}`);
+        }
+        m.sentAt = m.prompting.at;
+        m.prompting = null;
         save();
-        herdrPrompt(agent, `/council Read and execute the council assignment at ${m.assignment}\n\nVote file: ${m.votePath}`);
       } catch (e) {
         fail(role, m, `could not start: ${e.message}`);
       }

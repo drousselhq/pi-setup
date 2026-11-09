@@ -216,7 +216,7 @@ test('a prerequisite slice is refused when the current slice already has commits
   const h = new FakeHerdr(p, (c) => {
     if (c.role === 'implementer' && c.slice === 'S2' && c.n === 1) { p.commit('early.txt'); return askOnce()(c); }
     if (c.role === 'advisor') {
-      assert.match(c.assignment(), /cannot be inserted before it: do not offer that option/);
+      assert.match(c.assignment(), /A prerequisite slice cannot be added now: S2 already has commits or changes since it started, so it cannot be set aside\. Do not offer that option\./);
       c.write(brief());
       return c.answer(decision({ slice: SLICE }));
     }
@@ -226,7 +226,7 @@ test('a prerequisite slice is refused when the current slice already has commits
   assert.equal(h.run(), 2);
   assert.equal(p.read('plan.md'), planBefore);
   assert.match(p.read('decisions.md'), /## D1/);
-  assert.match(p.log(), /STOPPED: Owner decision D1 asks for a prerequisite slice \("Make the fixture"\) before S2, but S2 already has commits/);
+  assert.match(p.log(), /STOPPED: Owner decision D1 asks for a prerequisite slice \("Make the fixture"\), but S2 already has commits or changes since it started/);
   assert.equal(p.state().cur.slice, 'S2');
 });
 

@@ -1,7 +1,7 @@
 // pi-relay: What happens after each result: the next step, review loops, escalation, finishing a slice.
 
 import { acceptanceStep, implementerNote, PREP_ORDER, recordAcceptance, reviewerNote } from './acceptance.mjs';
-import { closeAgent, closeAll } from './agents.mjs';
+import { releaseAgent, releaseAll } from './agents.mjs';
 import { sliceChanged } from './changes.mjs';
 import { C, compactionText, emit, event, fmtDuration, GUTTER, log, out, resultIcon, resultLabel, roleTag, shortModel } from './console.mjs';
 import { checkPlan, FINAL_SLICE, parsePlan, PLAN_FORMAT, PLAN_SLICE, progress, progressText } from './plan.mjs';
@@ -97,7 +97,7 @@ export function escalate(reason, step) {
       + 'its session is not available to you. Before patching again, check whether the approach itself is wrong; you may rework '
       + `this slice's changes within its scope. Then complete this step:\n\n${step.text}${implementerNote()}`,
   };
-  closeAgent('implementer');
+  releaseAgent('implementer');
   save();
   const rc = cfg.roles?.senior ?? {};
   emit('escalation', { from: 'implementer', to: 'senior', reason, reviewLoops: c.cycle, model: rc.model ?? null, thinking: rc.thinking ?? null });
@@ -113,7 +113,7 @@ export function stopOnRunaway(p, r, slice) {
   // A re-run retries in a fresh session; --fresh can replace this retry (retryOf). Saved together with the
   // closed worker, so an interruption in between cannot lose the step.
   c.queued = { role: p.role, purpose: p.purpose, initial: true, text: p.text, retryOf: 'runaway' };
-  closeAgent(p.role);
+  releaseAgent(p.role); // its tab is closed by the stop
   save();
   const fresh = `pi-relay ${ctx.topic} --fresh ${p.role} --note "..."`;
   const planning = ['PLAN', 'FINAL'].includes(slice.id) ? '' // not a slice of plan.md
@@ -129,8 +129,9 @@ export function stopOnRunaway(p, r, slice) {
     + `.${planning}`);
 }
 
-// Applies a worker's result. If the transition fails before it has recorded a successor (a next step
-// or the end of the slice), the result stays pending, so a restart replays the transition from that
+// Applies a worker's result. A transition records its successor (a queued step, or the slice done) before it
+// saves, and only releases workers in memory (agents.mjs). If it fails before it has recorded a successor
+// (a next step or the end of the slice), the result stays pending, so a restart replays the transition from that
 // result instead of finding no next step (see collect(), which reads a finished result directly).
 export function transition(r) {
   const c = state.cur;
@@ -187,14 +188,14 @@ function applyResult(c, p, r) {
   }
 
   if (p.purpose === 'help') {
-    closeAgent(p.role);
+    releaseAgent(p.role);
     const back = c.returnTo;
     c.returnTo = null;
     return queue({ ...back, initial: false, text: `The ${p.role} answered your question in ${r.artifact ?? artifactPath(p.role, slice.id)}. Read it and continue your current step.` });
   }
 
   if (p.role === 'planner') {
-    closeAgent('planner');
+    releaseAgent('planner');
     checkPlan('The plan the planner wrote', true);
     const slices = parsePlan();
     log(`PLAN has ${slices.length} slices: ${slices.map((s) => s.id).join(', ')}`, { quiet: true });
@@ -206,7 +207,7 @@ function applyResult(c, p, r) {
     if (p.role === 'acceptance' && r.status === 'done') recordAcceptance(slice.id, r);
     c.prep.shift();
     queue(c.prep.length ? prepMessage(c.prep[0], slice) : implementMessage(slice));
-    return closeAgent(p.role);
+    return releaseAgent(p.role);
   }
 
   if (p.role === 'implementer' || p.role === 'senior') {
@@ -241,9 +242,10 @@ function applyResult(c, p, r) {
   }
 }
 
+// Records the slice as done; its workers are released (runSlice() closes their tabs after saving).
 export function finishSlice() {
   const c = state.cur;
-  closeAll();
+  releaseAll();
   const head = git(['rev-parse', 'HEAD']);
   const commits = c.base && head && head !== c.base ? git(['log', '--format=%h %s', `${c.base}..HEAD`]) : '';
   state.slices[c.slice] = {

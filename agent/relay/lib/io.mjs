@@ -2,7 +2,8 @@
 
 import { spawnSync } from 'node:child_process';
 
-export function run(cmd, args, opts = {}) {
+// Not exported: everything outside the relay's own files goes through the io object below.
+function run(cmd, args, opts = {}) {
   const r = spawnSync(cmd, args, { encoding: 'utf8', maxBuffer: 64 << 20, ...opts });
   if (r.error) throw r.error;
   return r;

@@ -78,22 +78,47 @@ function closeUnstarted(a) {
   a.tab = null;
 }
 
-export function closeAgent(role) {
+// Releasing a worker forgets it in memory and lists its tab in state.closingTabs; closeTabs() closes the
+// listed tabs. A transition releases its workers, records its successor, saves, and only then closes the
+// tabs, so no saved state lacks a next step. A run killed in between leaves listed tabs that the next run
+// closes after taking the lock (closing is idempotent).
+export function releaseAgent(role) {
   const a = state.cur.agents[role];
   if (!a) return;
-  const unstarted = Boolean(a.starting);
-  if (unstarted) closeUnstarted(a);
-  const live = !unstarted && agentAlive(a);
-  if (live && live.agent_status === 'working') {
-    herdr(['agent', 'wait', a.name, '--until', 'idle', '--until', 'done'], { allowFail: true });
+  if (a.starting) {
+    emit('agent_start_recovered', { role: a.role, agent: a.name, tab: a.tab });
+    log(`${state.cur.slice} closed ${a.role} ${a.name}, whose start was interrupted`, { quiet: true });
   }
-  if (live) herdr(['tab', 'close', a.tab], { allowFail: true });
+  if (a.tab) state.closingTabs = [...(state.closingTabs ?? []), { tab: a.tab, name: a.name, wait: !a.starting }];
+  a.tab = null; // a copy kept to resume the session (a set-aside slice) has nothing left to close
+  delete a.starting;
   delete state.cur.agents[role];
+}
+
+export function releaseAll() {
+  for (const role of Object.keys(state.cur?.agents ?? {})) releaseAgent(role);
+}
+
+// A worker still busy (committing, say) is let finish before its tab closes.
+export function closeTabs() {
+  const list = state.closingTabs ?? [];
+  if (!list.length) return;
+  for (const t of list) {
+    const live = t.wait && agentAlive(t);
+    if (live && live.agent_status === 'working') herdr(['agent', 'wait', t.name, '--until', 'idle', '--until', 'done'], { allowFail: true });
+    herdr(['tab', 'close', t.tab], { allowFail: true });
+  }
+  state.closingTabs = [];
   save();
 }
 
-export function closeAll() {
-  for (const role of Object.keys(state.cur?.agents ?? {})) closeAgent(role);
+// Outside transitions: release, save, close.
+export function closeAgent(role) {
+  if (!state.cur?.agents[role]) return;
+  releaseAgent(role);
+  save();
+  closeTabs();
 }
+
 
 // ---------- assignments and messages ----------

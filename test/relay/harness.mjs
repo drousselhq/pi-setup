@@ -154,7 +154,13 @@ export class FakeHerdr {
     }
     const ag = this.agents.get(name);
     if (!ag?.alive) return this.err('agent_not_found', `no agent ${name}`);
-    if (cmd === 'get' || cmd === 'wait' || cmd === 'send-keys') return this.ok({ agent: { agent_status: 'idle' } });
+    if (cmd === 'wait') {
+      // Fake agents are idle between prompts: a wait for another status times out, as in Herdr.
+      const until = a.flatMap((x, i) => (x === '--until' ? [a[i + 1]] : []));
+      if (until.length && !until.some((u) => u === 'idle' || u === 'done')) return this.err('timeout', `${name} stayed idle`);
+      return this.ok({ agent: { agent_status: 'idle' } });
+    }
+    if (cmd === 'get' || cmd === 'send-keys') return this.ok({ agent: { agent_status: 'idle' } });
     if (cmd === 'prompt') {
       const text = a[3];
       const resultPath = (text.match(/\S+\.result\.json/g) ?? []).at(-1);
@@ -176,19 +182,21 @@ export class FakeHerdr {
         // The owner's answer arrives after the brief: give it a later mtime than the file it replaces.
         answer: (obj) => this.pending.push(() => writeResult(resultPath, obj, { after: resultPath })),
       });
+      // It worked on the prompt: its session records a turn, as a real agent's does when it responds.
+      fs.appendFileSync(ag.session, `${JSON.stringify({ type: 'message', message: { role: 'assistant', usage: { input: 1, output: 1 } } })}\n`);
       return this.ok({ agent: { agent_status: 'working' } });
     }
     return this.err('unknown', a.join(' '));
   }
 }
 
+// A result's time is the relay's clock (Date.now(), which the fault sweep advances), as for a real worker
+// writing while the relay waits.
 export function writeResult(file, obj, { after } = {}) {
   const before = after && fs.existsSync(after) ? fs.statSync(after).mtimeMs : null;
   fs.writeFileSync(file, typeof obj === 'string' ? obj : JSON.stringify(obj, null, 2));
-  if (before !== null) {
-    const t = new Date(before + 1000);
-    fs.utimesSync(file, t, t);
-  }
+  const t = new Date(before !== null ? Math.max(before + 1000, Date.now()) : Date.now());
+  fs.utimesSync(file, t, t);
 }
 
 export const done = (summary = 'done', extra = {}) => ({ status: 'done', summary, checks: ['fake → pass'], ...extra });

@@ -4,14 +4,15 @@
 // See README.md beside this file for file formats and usage. The code is in lib/:
 //   relay.mjs          main loop and runRelay()           transitions.mjs    what follows each result
 //   steps.mjs          one worker step: assignment,       advisor.mjs        decisions via the advisor
-//                      prompt, result file, waiting       council.mjs        the advisory council's votes
+//                      result file, send, collect         council.mjs        the advisory council's votes
+//   waiting.mjs        prompts (at least once), settling, waiting for the owner in a worker's tab
 //   prerequisites.mjs  inserted slices, set aside, resume  acceptance.mjs     acceptance tests written before code
 //   changes.mjs        whether a slice changed anything   fresh.mjs          --fresh: replace the waiting worker
-//   agents.mjs         worker tabs and sessions           plan.mjs           plan.md and progress
+//   agents.mjs         worker tabs, sessions, release     plan.mjs           plan.md, its checks and progress
 //   store.mjs          paths, config, state, lock         quota.mjs          Anthropic quota pacing
 //   usage.mjs          session token usage                console.mjs        console, log.md, events.jsonl
 //   runtime.mjs        shared state and constants         io.mjs             the real outside world
-// Tests: test/relay/ in the pi-setup repository.
+// Tests: test/relay/ in the pi-setup repository; faults*.test.mjs kill the relay at every save of scenarios.
 
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';

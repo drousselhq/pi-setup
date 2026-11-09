@@ -2,7 +2,6 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { run } from './io.mjs';
 import { ctx, io, now, plural, RUN_ID, state } from './runtime.mjs';
 
 export let TTY = false; // set at the start of main()
