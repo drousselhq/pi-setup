@@ -80,7 +80,11 @@ the terminal. One case needs you: a relay killed during the moment it takes over
     when not both have low confidence. The relay then records the decision itself, from what was voted: the
     option's label, its action, deferral or prerequisite slice as the advisor wrote them, and the members'
     conditions, word for word; the waiting worker gets the same as a binding instruction, and the reviewer a
-    pointer to it. If the worker cannot satisfy it, its question comes to you without a second vote.
+    pointer to it. Later questions of the same worker step go to the council too. The advisor lists the
+    earlier decisions a question would change (`revisits`), and the members see them: they may amend a
+    council decision within its intent, while changing one of yours stays yours unless the project's rules
+    say otherwise. The council answers one such question per worker step, and at most three questions in
+    all per step: past that, the question comes to you.
     You get a notification, the decision is recorded as **Decided by the council** with the models, classes
     and reversibility, and the closing summary lists the run's council decisions. A later decision of yours
     can overrule it.
@@ -203,7 +207,7 @@ One JSON object per line. Every event has `t`, `run` (one ID per relay process),
 | `step_sent` / `step_result` | role, purpose / status, verdict, blocking, summary, question, verification, checks, durationMs, usage |
 | `operator_wait_start` / `operator_wait_end` | role, status, question / waitedMs |
 | `permission_wait` | role, waitedMs (workers), screen (an excerpt of the worker's screen) |
-| `advisor_start`, `advisor_brief` | workerRole, question / the whole brief: title, question, context, options (every field), recommended, reason, notes, ownerNeeded |
+| `advisor_start`, `advisor_brief` | workerRole, question / the whole brief: title, question, context, options (every field), recommended, reason, notes, ownerNeeded, revisits |
 | `owner_decision`, `council_decision` | id, title, decision, chosen (the option's number, or null), workerRole, replies (roles), prerequisite (a prerequisite slice's title) |
 | `council_start`, `council_vote`, `council_escalation` | options, members / member, model, choice, classes, confidence, reversibility, ownerNeeded or failed / reasons |
 | `nudge`, `redeliver` | role, purpose, reason |

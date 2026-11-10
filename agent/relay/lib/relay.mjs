@@ -30,7 +30,9 @@ export function runSlice(slice) {
       slice: slice.id, ...baseline,
       cycle: 0, help: 0, agents: {}, assignments: {}, pending: null, queued: null, prep: [], findings: [],
       startedAt: Date.now(), fresh: true, resumed: RUN_ID,
+      ...(slice.id === 'FINAL' ? state.finalCouncil : {}), // a restarted final verification keeps its council counts
     };
+    if (slice.id === 'FINAL') delete state.finalCouncil;
     emit('slice_start', { title: slice.title, needs: slice.needs, base: state.cur.base });
     log(`${slice.id} start: ${slice.title}`, { quiet: true });
     heading(`${slice.id}  ${slice.title}`, sliceProgress(slice));

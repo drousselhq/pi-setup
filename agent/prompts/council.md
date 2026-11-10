@@ -20,6 +20,10 @@ actions, the decision classes, the classes the owner keeps, the records to read 
   claim is a lead, not a fact.
 - Check whether the owner already decided this or something equivalent. An earlier owner decision
   binds you unless new facts make it inapplicable; say which.
+- When the assignment names earlier decisions this question would change, read them. You may amend a
+  council decision within its intent: resolve conditions that cannot be met together, or settle a
+  detail it left open. Reversing its intent, or changing an owner's decision, is the owner's (set
+  `ownerNeeded`) unless the project's rules let the council do it.
 - The options are listed in a neutral order. No option is recommended; judge each on its merits.
   You may propose a new option only if every listed one is clearly wrong.
 

@@ -10,6 +10,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { moveStepCounts } from './advisor.mjs';
 import { closeTabs, releaseAgent } from './agents.mjs';
 import { C, emit, event, log } from './console.mjs';
 import { ctx, RelayStop, state } from './runtime.mjs';
@@ -36,6 +37,7 @@ export function replaceWorker(role, note) {
     }
     if (p.purpose !== 'review') { c.reviewed = false; ({ text, purpose } = reviewMessage()); } // a fresh reviewer reviews in full
   }
+  moveStepCounts(p, { role, purpose });
   const why = role === 'reviewer'
     ? 'The owner replaced the previous reviewer session for this step: do a full, independent review from the assignment.'
     : `The owner replaced the previous ${role} session for this step; its record is ${artifactPath(role, c.slice)}. `

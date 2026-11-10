@@ -76,7 +76,11 @@ When your assignment says the **advisory council** is enabled, also give:
   the table in your assignment (an action that lowers an acceptance criterion or gate is H; one that
   drops required work is E or H; a new dependency or harness is G);
 - **ownerNeeded:** null, or why the owner must decide even if the council agrees (their preference,
-  facts only they have, or the project's own rules reserving the decision to them).
+  facts only they have, or the project's own rules reserving the decision to them);
+- **revisits:** the IDs of the decisions in `decisions.md` that this question would change or work
+  around, or whose conditions the worker cannot follow (`[]` when none). Check honestly: the council
+  then sees those decisions and may amend its own within their intent, once per worker step; changing
+  one of the owner's decisions stays his (set `ownerNeeded`) unless the project's rules say otherwise.
 
 If both members choose the same option and nothing reserves it to the owner, the relay records that
 option's action, deferral or prerequisite slice word for word, with the members' conditions, as the

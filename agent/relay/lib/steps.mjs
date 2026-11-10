@@ -68,7 +68,8 @@ export function writeAssignment(role, purpose, slice, task) {
              // an option that postpones the decision also carries
              // "deferral": ${deferral}   (${Object.values(DEFERRAL_FIELDS).join(', ')})
              // with the advisory council enabled, each option also has "action": "exact technical action", "classes": ["A"]
-             "recommended": 1, "reason": "...", "notes": [], "ownerNeeded": null },
+             "recommended": 1, "reason": "...", "notes": [], "ownerNeeded": null,
+             "revisits": [] },  // with the council: IDs of decisions this question would change, e.g. ["D4"]
   // status done (after the owner chose):
   "title": "short decision title", "decision": "the decision as it should be recorded",
   "deferral": ${deferral},  // only when the owner chose to postpone

@@ -121,7 +121,7 @@ export function consultAdvisor(worker, p, r) {
         : slice.id === 'FINAL' ? 'The final verification has changed nothing yet, so a prerequisite slice can be added after the plan\'s last slice if the owner chooses one; the final verification then starts again after it.'
           : 'This slice has no commits or changes yet, so a prerequisite slice can be inserted before it if the owner chooses one.')
       + (councilEnabled()
-        ? `\n\nThe advisory council is enabled. Give every option in your brief an "action" (what workers will do, exact and technical) and its "classes", and set "ownerNeeded" (null, or why the owner must decide). The relay then either shows your brief to the owner, or has two council members vote on it: when they agree, the relay records the chosen option's action word for word, with the members' conditions, as the binding decision and sends it to the worker, so write every action self-contained (no "as in option 2"). You do not write a council decision. Classes:\n\n${classTable()}`
+        ? `\n\nThe advisory council is enabled. Give every option in your brief an "action" (what workers will do, exact and technical) and its "classes", set "ownerNeeded" (null, or why the owner must decide), and list in "revisits" the IDs of the decisions in decisions.md this question would change or work around, or whose conditions the worker cannot follow ([] when none). The relay then either shows your brief to the owner, or has two council members vote on it: when they agree, the relay records the chosen option's action word for word, with the members' conditions, as the binding decision and sends it to the worker, so write every action self-contained (no "as in option 2"). You do not write a council decision. Classes:\n\n${classTable()}`
         : ''));
     a = c.advice = { workerRole: worker.role, workerMtime: r._mtime, workerResult: r._path, briefPath: resultPathFor('advisor', 'brief'), startedAt: Date.now(), sent: 0 };
     c.assignments.advisor = assignment;
@@ -157,7 +157,8 @@ export function consultAdvisor(worker, p, r) {
           // The whole brief, for later evaluation: the result file is overwritten by the decision.
         const b = brief.brief;
         emit('advisor_brief', { title: b.title ?? null, question: b.question ?? null, context: b.context ?? null, options: b.options,
-          recommended: b.recommended ?? null, reason: b.reason ?? null, notes: b.notes ?? [], ownerNeeded: b.ownerNeeded ?? null });
+          recommended: b.recommended ?? null, reason: b.reason ?? null, notes: b.notes ?? [], ownerNeeded: b.ownerNeeded ?? null,
+          revisits: b.revisits ?? [] });
       }
       const got = decide(agent, a, slice, ask, p);
       if (got.fail) return fallback(...got.fail);
@@ -184,15 +185,13 @@ export function consultAdvisor(worker, p, r) {
 }
 
 // The decision for the brief: the council's when it agrees on a delegated option (built by the relay from
-// the vote), else the owner's. A worker that could not follow a council decision in this step asks the owner:
-// the council is not asked again. Returns { final, by, attribution } or { fail: [why, what] }.
+// the vote), else the owner's. Returns { final, by, attribution } or { fail: [why, what] }.
 function decide(agent, a, slice, ask, p) {
   let notes = [];
   let why = [];
   if (councilEnabled()) {
-    const asked = state.cur.councilAsked?.[stepKey(p)];
-    const direct = [...advisorOwnerReasons(a.brief), ...(asked ? [`the ${a.workerRole} asked again after council decision ${asked}`] : [])];
-    const outcome = direct.length ? { owner: direct } : runCouncil(a, slice);
+    const direct = [...advisorOwnerReasons(a.brief), ...councilLimits(a, p)];
+    const outcome = direct.length ? { owner: direct } : runCouncil(a, slice, stepCouncilDecisions(p));
     if (outcome.decided !== undefined) return { final: councilDecision(a, outcome), by: 'council', attribution: councilAttribution(a) };
     why = outcome.owner;
     notes = a.council ? ownerNotes(a) : [`The advisory council was not consulted: ${why.join('; ')}.`];
@@ -236,9 +235,12 @@ function deliver(worker, p, a, slice) {
     c.notes[role] = [c.notes[role], `${label} (${ctx.decisions}): ${text}`].filter(Boolean).join('\n\n');
   }
   a.notesAdded = true;
-  // A council decision marks the step it answered in the slice's state: a later question from that step goes to
-  // the owner (decide()). Whatever rebuilds the step (resume, retry, the senior, --fresh) keeps its key.
-  if (a.by === 'council') c.councilAsked = { ...c.councilAsked, [stepKey(p)]: id };
+  // A council decision is counted against the step it answered, in the slice's state (councilLimits()); whatever
+  // rebuilds the step (resume, retry, the senior, --fresh) keeps its key.
+  if (a.by === 'council' && !stepCouncilDecisions(p).includes(id)) {
+    c.councilAsked = { ...c.councilAsked, [stepKey(p)]: [...stepCouncilDecisions(p), id] };
+    if (a.brief.brief.revisits?.length) c.councilRevisited = { ...c.councilRevisited, [stepKey(p)]: id };
+  }
   if (final.slice) {
     const blocked = prerequisiteBlocked(slice);
     if (blocked) {
@@ -276,6 +278,32 @@ function deliver(worker, p, a, slice) {
   return true;
 }
 
+// The council decides later questions of a step too, an unrelated one as any other, and one that would change an
+// earlier decision (the advisor lists it in "revisits") once: a second such question, or a question after
+// COUNCIL_PER_STEP council decisions in the step, goes to the owner, so a worker cannot loop through the council.
+const COUNCIL_PER_STEP = 3;
+const stepCouncilDecisions = (p) => [].concat(state.cur.councilAsked?.[stepKey(p)] ?? []); // one id in older states
+
+function councilLimits(a, p) {
+  const decided = stepCouncilDecisions(p);
+  const revisits = a.brief.brief.revisits ?? [];
+  const revisited = state.cur.councilRevisited?.[stepKey(p)];
+  return [
+    ...(revisits.length && revisited ? [`the ${a.workerRole} asked again to change an earlier decision (${revisits.join(', ')}), `
+      + `after council decision ${revisited} already changed one in this step`] : []),
+    ...(decided.length >= COUNCIL_PER_STEP ? [`the council already decided ${decided.length} questions of this ${a.workerRole} step (${decided.join(', ')})`] : []),
+  ];
+}
+
+// --fresh can turn a re-review into a full review: the new step keeps the council counts of the step it replaces.
+export function moveStepCounts(from, to) {
+  const c = state.cur;
+  const [a, b] = [stepKey(from), stepKey(to)];
+  if (a === b) return;
+  if (c.councilAsked?.[a]) c.councilAsked = { ...c.councilAsked, [b]: [...stepCouncilDecisions(to), ...[].concat(c.councilAsked[a])] };
+  if (c.councilRevisited?.[a]) c.councilRevisited = { ...c.councilRevisited, [b]: c.councilRevisited[a] };
+}
+
 // One step of a slice, the same across whatever rebuilds it: its role (the senior continues the implementer's
 // step) and purpose (help steps by their number: several can share a role).
 function stepKey(p) {
@@ -287,6 +315,9 @@ function stepKey(p) {
 // plan; FINAL is dropped (not recorded done), so it starts again after the slice.
 function restartFinalAfter(id) {
   releaseAll();
+  // The restarted final verification is the same step: it keeps the council counts (runSlice() restores them).
+  const { councilAsked, councilRevisited } = state.cur;
+  if (councilAsked) state.finalCouncil = { councilAsked, councilRevisited };
   state.cur = null;
   emit('slice_set_aside', { slice: 'FINAL', before: id, restart: true });
   log(`FINAL set aside: ${id} runs first; then the final verification starts again`, { quiet: true });

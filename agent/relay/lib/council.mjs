@@ -73,6 +73,10 @@ export function councilBriefProblem(b) {
   if (slice >= 0) return `Option ${slice + 1}'s prerequisite "slice" needs a one-line "title" and at least one one-line "acceptance" condition.`;
   const on = b.brief.ownerNeeded;
   if (on !== undefined && on !== null && (typeof on !== 'string' || !on.trim())) return '"ownerNeeded" must be null or the reason the owner must decide.';
+  const rv = b.brief.revisits;
+  if (rv !== undefined && rv !== null && !(Array.isArray(rv) && rv.every((x) => typeof x === 'string' && x.trim()))) {
+    return '"revisits" must list the IDs of the decisions this question would change (for example ["D4"]), or be [].';
+  }
   return null;
 }
 
@@ -122,7 +126,7 @@ export function voteProblem(v, ids) {
   return wrong.length ? `Your vote is incomplete: ${wrong.join('; ')}.` : null;
 }
 
-function writeAssignment(role, slice, a, n) {
+function writeAssignment(role, slice, a, n, earlier) {
   const file = path.join(ctx.relayDir, `${String(++state.seq).padStart(3, '0')}-${role}.md`);
   const b = a.brief.brief;
   const options = a.council.order.map((i, k) => {
@@ -152,7 +156,7 @@ ${b.question}
 
 ${b.context ?? ''}
 
-## Options (neutral order; none is recommended)
+${earlierDecisions(b, earlier)}## Options (neutral order; none is recommended)
 
 ${options.join('\n')}
 
@@ -167,6 +171,26 @@ Write it to ${a.council.members[role].votePath} as JSON, in this format:
 ${voteFormat(a.council.ids)}
 `);
   return file;
+}
+
+// What the members must know about decisions this question touches (in decisions.md): those the advisor says it
+// would change, and the council decisions the same worker step already received.
+const AMEND_RULE = 'A council decision may be amended within its intent (resolving conditions that cannot be met together, or '
+  + 'refining a detail it left open); one that reverses its intent, and any change to a decision of the owner\'s, needs the owner '
+  + '(set "ownerNeeded") unless the project\'s own rules let the council make it. The council answers one such question per '
+  + 'worker step; a second goes to the owner.';
+
+function earlierDecisions(b, earlier) {
+  const lines = [];
+  if (b.revisits?.length) {
+    lines.push(`The advisor says this question would change or work around ${b.revisits.join(', ')}, or that the worker cannot `
+      + `follow its conditions. Read it in decisions.md. ${AMEND_RULE}`);
+  }
+  if (earlier.length) {
+    lines.push(`This worker step already received council decision${earlier.length === 1 ? '' : 's'} ${earlier.join(', ')}.`
+      + (b.revisits?.length ? '' : ` If this question would in fact change ${earlier.length === 1 ? 'it' : 'one of them'}: ${AMEND_RULE}`));
+  }
+  return lines.length ? `## Earlier decisions\n\n${lines.join('\n\n')}\n\n` : '';
 }
 
 function closeMember(role) {
@@ -185,14 +209,15 @@ function fail(role, m, why) {
 }
 
 // Starts or resumes the vote and returns the outcome: { decided: option index, conditions } or { owner: [reasons] }.
-export function runCouncil(a, slice) {
+// earlier: the council decisions the waiting worker's step already received.
+export function runCouncil(a, slice, earlier = []) {
   const opts = a.brief.brief.options;
   if (!a.council) {
     const order = opts.map((_, i) => i).sort((x, y) => opts[x].label.localeCompare(opts[y].label));
     a.council = { order, ids: order.map((_, k) => `X${k + 1}`), ownerClasses: ownerClasses(), members: {} };
     for (const [n, role] of cfg.council.members.entries()) {
       a.council.members[role] = { model: cfg.roles[role].model, thinking: cfg.roles[role].thinking ?? 'medium', votePath: path.join(ctx.relayDir, `${String(++state.seq).padStart(3, '0')}-${role}-vote.result.json`) };
-      a.council.members[role].assignment = writeAssignment(role, slice, a, n + 1);
+      a.council.members[role].assignment = writeAssignment(role, slice, a, n + 1, earlier);
     }
     save();
     emit('council_start', { options: opts.length, members: Object.fromEntries(Object.entries(a.council.members).map(([r, m]) => [r, m.model])) });
