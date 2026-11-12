@@ -5,7 +5,7 @@
     "../../Documents/devel/pi-quotas",
     "npm:@injaneity/pi-computer-use"
   ],
-  "lastChangelogVersion": "1.4.0",
+  "lastChangelogVersion": "1.5.2",
   "theme": "dark",
   "defaultTools": [
     "+codemode"
@@ -28,5 +28,10 @@
     "maxRetries": 3,
     "baseDelayMs": 10000
   },
-  "hideThinkingBlock": false
+  "hideThinkingBlock": false,
+  "extensionChangelogVersions": {
+    "{\"source\":\"npm:@aliou/pi-guardrails\",\"scope\":\"user\"}": "0.23.0",
+    "{\"source\":\"npm:@gotgenes/pi-anthropic-auth\",\"scope\":\"user\"}": "3.4.4",
+    "{\"source\":\"../../Documents/devel/pi-quotas\",\"scope\":\"user\"}": "0.5.0"
+  }
 }
