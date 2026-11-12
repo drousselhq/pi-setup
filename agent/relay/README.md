@@ -41,8 +41,11 @@ ended the relay or the wait is still open, is listed as not timed), and the coun
 directly in a worker's tab count in the waiting time, not as decisions.
 
 The console shows a coloured, live view: a header per slice, each step and result, a running
-timer while a worker is busy, and highlighted boxes when it needs you. `relay/log.md` records the
-same events as plain text. Set `NO_COLOR=1` for plain console output.
+timer while a worker is busy, and highlighted boxes when it needs you. A long text under an event (a
+decision, a worker's summary or question, the plan's slices) is cut to three rows of the terminal, followed by
+the file in the topic folder that has it in full (`decisions.md`, the worker's result file under `relay/`,
+`plan.md`; on a very narrow screen that name may wrap); a decision brief you must answer, and the relay's own
+notes, are shown whole. `relay/log.md` records the same events as plain text. Set `NO_COLOR=1` for plain console output.
 
 Stopping the script (Ctrl-C) is safe, and so is the script being killed at any moment. Re-running it resumes
 from `relay/state.json`: every saved state names the next step, a step whose prompt may not have reached its

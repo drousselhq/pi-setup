@@ -1,6 +1,7 @@
 // pi-relay: The advisor: plain-language decision briefs, decisions by the owner or the advisory council, records and replies.
 
 import fs from 'node:fs';
+import path from 'node:path';
 import { agentAlive, closeAgent, closeTabs, ensureAgent, releaseAgent, releaseAll } from './agents.mjs';
 import { sliceChanged } from './changes.mjs';
 import { C, callout, emit, event, log, roleTag } from './console.mjs';
@@ -129,7 +130,7 @@ export function consultAdvisor(worker, p, r) {
     closeTabs();
     emit('advisor_start', { workerRole: worker.role, question: r.question ?? null });
     event(C.magenta('?'), `${roleTag(worker.role)} ${C.magenta('needs a decision')} ${C.dim('\u00b7 asking the advisor for a plain-language brief')}`,
-      r.question ?? r.summary ?? '');
+      r.question ?? r.summary ?? '', r._path && path.relative(ctx.topicDir, r._path));
   }
   if (!a.recorded) {
     if (!a.recording) {
@@ -176,7 +177,8 @@ export function consultAdvisor(worker, p, r) {
       emit(by === 'council' ? 'council_decision' : 'owner_decision', { id, title, decision: final.decision, chosen: final.chosen ?? null,
         workerRole: worker.role, replies: Object.keys(final.replies ?? {}), prerequisite: final.slice?.title ?? null });
       log(`${slice.id} ${by} decision ${id}: ${title}`, { quiet: true });
-      event(C.green('\u2713'), `${C.green(C.bold(`${by === 'council' ? 'council ' : ''}decision ${id}`))} ${title}`, final.decision);
+      event(C.green('\u2713'), `${C.green(C.bold(`${by === 'council' ? 'council ' : ''}decision ${id}`))} ${title}`, final.decision,
+        path.relative(ctx.topicDir, ctx.decisions));
       if (by === 'council') notify(`Relay ${ctx.topic}: council decided ${id}`, `${title}\nRecorded in decisions.md; a later decision of yours can overrule it.`);
     }
     closeAgent('advisor');

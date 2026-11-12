@@ -49,9 +49,10 @@ export function parsePlan() {
       cur.lines.push(line);
       const n = line.match(NEEDS_LINE);
       if (n) cur.needs = needsTokens(n[1].toLowerCase()).filter((x) => PREP_NEEDS.includes(x));
-      // Acceptance criteria: the bullets under "Acceptance:" (or one inline criterion after the colon).
-      const a = line.match(/^\W*acceptance\W*:\s*(.*)$/i);
-      if (a) { cur.inAcceptance = true; if (a[1].trim()) cur.acceptance++; }
+      // Acceptance criteria: the bullets under "Acceptance:" (or one inline criterion after the colon). The heading may
+      // carry a note in brackets ("Acceptance (narrowed by council decision D40):").
+      const a = line.match(/^\W*acceptance\b(?:\s*\([^)]*\))?\W*:\s*(.*)$/i);
+      if (a) { cur.inAcceptance = true; if (a[1].replace(/[\s*_]/g, '')) cur.acceptance++; } // "**Acceptance:**" leaves only "**"
       else if (cur.inAcceptance && /^\s*([-*+]|\d+[.)])\s+\S/.test(line)) cur.acceptance++;
       else if (cur.inAcceptance && line.trim() && !/^\s{2,}\S/.test(line)) cur.inAcceptance = false;
     }

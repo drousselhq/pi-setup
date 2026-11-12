@@ -1,5 +1,6 @@
 // pi-relay: What happens after each result: the next step, review loops, escalation, finishing a slice.
 
+import path from 'node:path';
 import { acceptanceStep, implementerNote, PREP_ORDER, recordAcceptance, reviewerNote } from './acceptance.mjs';
 import { releaseAgent, releaseAll } from './agents.mjs';
 import { candidateTree, sliceChanged, strayChanges } from './changes.mjs';
@@ -172,7 +173,7 @@ function applyResult(c, p, r) {
   }
   if (usage) facts.push(C.gray(plural(usage.turns, 'turn')), compactionText(usage.compactions));
   event(resultIcon(r), `${roleTag(p.role)} ${resultLabel(r)}${facts.length ? ` ${C.gray('\u00b7')} ${facts.join(C.gray(' \u00b7 '))}` : ''}`,
-    [r.summary, r.question && `Question: ${r.question}`].filter(Boolean).join('\n'));
+    [r.summary, r.question && `Question: ${r.question}`].filter(Boolean).join('\n'), r._path && path.relative(ctx.topicDir, r._path));
 
   if (r.status === 'runaway') return stopOnRunaway(p, r, slice);
 
@@ -202,7 +203,7 @@ function applyResult(c, p, r) {
     checkPlan('The plan the planner wrote', true);
     const slices = parsePlan();
     log(`PLAN has ${slices.length} slices: ${slices.map((s) => s.id).join(', ')}`, { quiet: true });
-    event(C.green('\u2713'), `${C.bold(`plan: ${slices.length} slice${slices.length === 1 ? '' : 's'}`)}`, slices.map((s) => `${s.id}  ${s.title}${s.needs.length ? `  [${s.needs.join(', ')}]` : ''}`).join('\n'));
+    event(C.green('\u2713'), `${C.bold(`plan: ${slices.length} slice${slices.length === 1 ? '' : 's'}`)}`, slices.map((s) => `${s.id}  ${s.title}${s.needs.length ? `  [${s.needs.join(', ')}]` : ''}`).join('\n'), path.relative(ctx.topicDir, ctx.plan));
     return finishSlice();
   }
 

@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { test } from 'node:test';
+import { event } from '../../agent/relay/lib/console.mjs';
+import { setIo } from '../../agent/relay/lib/runtime.mjs';
 import {
   FakeHerdr, StopRelay, TOPIC, accept, brief, changes, decision, done, finished, makeProject, standard, writeResult,
 } from './harness.mjs';
@@ -144,6 +146,74 @@ test('a decision goes through the advisor, is recorded, and the reply reaches th
   assert.match(p.read('decisions.md'), /## D1 · .* · S1 · Test decision\n\nThe owner chose A\./);
   assert.match(h.prompts[2].text, /Owner decision D1 .*\n\nProceed with A\./);
   assert.match(h.prompts[3].assignment() + h.prompts[3].text, /Owner decision D1 .*Check A\./s, 'the reviewer gets its note');
+});
+
+test('the console cuts a long decision or result to three lines, pointing to the file that has it in full', () => {
+  const p = makeProject({ plan: ONE });
+  const long = (what) => `${what} begins here. ${'This sentence makes the text long. '.repeat(20)}The very end of ${what}.`;
+  const h = new FakeHerdr(p, (c) => {
+    if (c.role === 'implementer' && c.slice === 'S1' && c.n === 1) return askOnce()(c);
+    if (c.role === 'advisor') { c.write(brief()); return c.answer(decision({ decision: long('the decision') })); }
+    if (c.role === 'implementer' && c.slice === 'S1') { c.p.commit('s1.txt'); return c.write(done(long('the summary'))); }
+    return standard(c);
+  });
+  assert.equal(h.run(), 0);
+  assert.match(p.read('decisions.md'), /The very end of the decision\./, 'the record keeps it in full');
+  const out = h.output;
+  for (const what of ['the decision', 'the summary']) {
+    assert.match(out, new RegExp(`${what} begins here`));
+    assert.doesNotMatch(out, new RegExp(`The very end of ${what}`));
+  }
+  const cut = (line) => out.split('\n').findIndex((l) => l.includes(line));
+  const at = cut('the decision begins here');
+  assert.match(out.split('\n')[at + 2], / \u2026$/, 'three lines, the third ending with an ellipsis');
+  assert.match(out.split('\n')[at + 3], /^\s+full text: decisions\.md$/);
+  assert.match(out.split('\n')[cut('the summary begins here') + 3], /^\s+full text: relay\/\S+\.result\.json$/);
+  assert.match(out, /reviewer accepted[^\n]*\n\s+accepted\n/, 'a short result is shown in full, without a pointer');
+});
+
+test('on a narrow terminal, a long detail stays within three rows of cells, long words broken, its colour reset at the end', () => {
+  const p = makeProject({ plan: ONE });
+  const details = {
+    word: `${'x'.repeat(400)} end-of-word`,
+    paragraphs: `${Array.from({ length: 6 }, () => 'p'.repeat(33)).join('\n\n')} \x1b[31m${'q'.repeat(200)}\x1b[0m`,
+    wide: `a${'\u{1f600}'.repeat(60)} ${'\u754c'.repeat(100)}`,
+  };
+  const h = new FakeHerdr(p, (c) => {
+    if (c.role === 'implementer' && c.slice === 'S1') { c.p.commit('s1.txt'); return c.write(done(details.word)); }
+    if (c.role === 'reviewer') return c.write(done(details.paragraphs, { verdict: 'accept', blocking: [] }));
+    if (c.role === 'implementer' && c.slice === 'FINAL') return c.write(done(details.wide, { verification: 'pass' }));
+    return standard(c);
+  });
+  h.ioExtra.columns = () => 40;
+  h.ioExtra.isTTY = () => true;
+  assert.equal(h.run(), 0);
+  const rows = h.output.split('\n');
+  const plain = (l) => l.replace(/\x1b\[[0-9;]*m/g, '');
+  const cells = (l) => [...l].reduce((n, ch) => n + (/[\u754c\u{1f600}]/u.test(ch) ? 2 : 1), 0);
+  for (const mark of ['xxxx', 'pppp', 'a\u{1f600}']) {
+    const first = rows.findIndex((l) => plain(l).includes(mark));
+    const block = rows.slice(first, first + 4).map(plain);
+    assert.ok(block.slice(0, 3).every((l) => cells(l) <= 40 && l.trim()), block.join('\n'));
+    assert.match(block[2], / \u2026$/);
+    assert.match(block[3], /^\s+full text:/, 'then the file (its name may wrap on a very narrow screen)');
+    assert.match(rows[first + 2], /\x1b\[0m$/, 'the dimmed block ends with a colour reset');
+    assert.ok(block.every((l) => !/[\ud800-\udfff]/.test(l.replace(/[\u{10000}-\u{10ffff}]/gu, ''))), 'no character split in half');
+  }
+  assert.doesNotMatch(h.output, /end-of-word|\x1b\[31m/);
+});
+
+test('a long detail without a file that holds it is shown whole; colour codes in a detail never reach its shortened text', () => {
+  let out = '';
+  setIo({ write: (t) => { out += t; }, columns: () => 40, isTTY: () => false });
+  event('*', 'relay note', `${'word '.repeat(60)}the-end-of-the-note`);
+  assert.match(out, /the-end-of-the-note/);
+  assert.doesNotMatch(out, /full text/);
+  out = '';
+  event('*', 'decision', `\x1b[31mred${' word'.repeat(60)}`, 'decisions.md');
+  assert.match(out, /red word/);
+  assert.doesNotMatch(out, /\x1b\[31m/);
+  assert.match(out, /full text: decisions\.md/);
 });
 
 test('an unparseable decision is rewritten by the advisor without asking the owner again', () => {

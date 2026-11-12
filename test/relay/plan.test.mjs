@@ -113,6 +113,17 @@ Acceptance:
   assert.ok(roles(h).includes('S2A:scout') && roles(h).includes('S3:architect'), 'preparation still read from Needs:');
 });
 
+test('acceptance bullets count under a heading with a note in brackets or in bold, and an inline criterion in any script', () => {
+  const plan = '# Plan\n\n## S1: First\nNeeds: none\nAcceptance (narrowed by council decision D4: two items):\n- a\n- b\n\n'
+    + '## S2: Second\nNeeds: none\n**Acceptance:**\n- c\n\n## S3: Third\nNeeds: none\nAcceptance: 表示が正しい\n- d\n';
+  const p = makeProject({ plan });
+  const h = new FakeHerdr(p, standard);
+  assert.equal(h.run([TOPIC, '--status']), 0);
+  assert.match(h.output, /acceptance 0\/5/);
+  assert.match(h.output, /S1\s+\S+ todo\s+First\s+acceptance 0\/2/);
+  assert.match(h.output, /S3\s+\S+ todo\s+Third\s+acceptance 0\/2/, 'an inline criterion in any script counts');
+});
+
 test('--status still shows a malformed plan', () => {
   const p = makeProject({ plan: '# Plan\n\n## S1: First\nNeeds: acceptence\nAcceptance:\n- x\n' });
   const h = new FakeHerdr(p, standard);

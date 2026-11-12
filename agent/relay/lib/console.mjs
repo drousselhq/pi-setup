@@ -128,9 +128,46 @@ export function activeStyle(text) {
   return codes.slice(lastReset + 1).join('');
 }
 
-export function event(icon, text, detail) {
-  out(wrap(text, 0, ' '.repeat(narrow() ? 4 : GUTTER), `  ${C.gray(hhmm())}  ${icon} `));
-  if (detail) out(C.dim(wrap(detail, narrow() ? 4 : GUTTER)));
+// An event line, with an optional detail (a decision, a worker's summary). A detail whose full text is in a file
+// (`more`, relative to the topic folder) is shown in at most DETAIL_LINES rows of the terminal, then that file's
+// name, so a phone screen stays readable; one without such a file is shown whole.
+export const DETAIL_LINES = 3;
+export function event(icon, text, detail, more) {
+  const indent = narrow() ? 4 : GUTTER;
+  out(wrap(text, 0, ' '.repeat(indent), `  ${C.gray(hhmm())}  ${icon} `));
+  if (!detail) return;
+  if (!more) return out(C.dim(wrap(detail, indent)));
+  const max = Math.max(10, width() - indent);
+  const rows = cellRows(String(detail).replace(ANSI, ''), max);
+  const pad = ' '.repeat(indent);
+  if (rows.length <= DETAIL_LINES) return out(C.dim(rows.map((r) => pad + r).join('\n')));
+  let last = [...rows[DETAIL_LINES - 1]];
+  while (last.length && cellsOf(last.join('')) + 2 > max) last.pop();
+  out(C.dim([...rows.slice(0, DETAIL_LINES - 1), `${last.join('').trimEnd()} \u2026`].map((r) => pad + r).join('\n')));
+  out(C.dim(wrap(`full text: ${more}`, indent)));
+}
+
+// Terminal cells of a character: 2 for East Asian wide and fullwidth characters and most emoji, else 1.
+const WIDE = /[\u1100-\u115f\u2e80-\ua4cf\uac00-\ud7a3\uf900-\ufaff\ufe30-\ufe4f\uff00-\uff60\uffe0-\uffe6\u{1f300}-\u{1f64f}\u{1f680}-\u{1f6ff}\u{1f900}-\u{1f9ff}\u{1fa70}-\u{1faff}\u{20000}-\u{3fffd}]/u;
+const cellsOf = (text) => [...text].reduce((n, ch) => n + (WIDE.test(ch) ? 2 : 1), 0);
+
+// Plain text wrapped into rows of at most `max` cells, words longer than a row broken; blank lines dropped.
+function cellRows(text, max) {
+  const rows = [];
+  for (const para of text.split('\n')) {
+    let row = '';
+    for (const word of para.split(/\s+/).filter(Boolean)) {
+      if (row && cellsOf(row) + 1 + cellsOf(word) <= max) { row += ` ${word}`; continue; }
+      if (row) rows.push(row);
+      row = '';
+      for (const ch of word) {
+        if (cellsOf(row) + cellsOf(ch) > max) { rows.push(row); row = ''; }
+        row += ch;
+      }
+    }
+    if (row) rows.push(row);
+  }
+  return rows;
 }
 
 export function heading(title, right = '') {
