@@ -168,6 +168,42 @@ export function emit(type, data = {}) {
   try { fs.appendFileSync(path.join(ctx.relayDir, 'events.jsonl'), JSON.stringify(entry) + '\n'); } catch { /* history is best-effort */ }
 }
 
+// What the topic has asked of the owner, from relay/events.jsonl, so he can see how far he is in the loop: his
+// decisions (and, among those where the option he chose was recorded by its number, how many took the recommended
+// option, always option 1), the time the relay waited before he answered, and the council's decisions. A wait that
+// a stop interrupted counts until that run's recorded stop; one whose end was not recorded (Ctrl-C kills the relay
+// without a trace, or the wait is still open) is listed as not timed. Null before anything was asked.
+export function ownerSummary() {
+  let lines;
+  try { lines = fs.readFileSync(path.join(ctx.relayDir, 'events.jsonl'), 'utf8').split('\n'); } catch { return null; }
+  const n = { owner: 0, known: 0, recommended: 0, council: 0, waited: 0, untimed: 0 };
+  const open = new Map(); // run + role -> start of a wait not yet ended
+  const stops = new Map(); // run -> time of its recorded stop
+  for (const line of lines) {
+    let e;
+    try { e = JSON.parse(line); } catch { continue; }
+    const at = Date.parse(e.t);
+    if (e.type === 'run_stop' && Number.isFinite(at)) stops.set(e.run, at);
+    if (e.type === 'owner_decision') {
+      n.owner++;
+      if (Number.isInteger(e.chosen)) { n.known++; if (e.chosen === 1) n.recommended++; }
+    } else if (e.type === 'council_decision') n.council++;
+    else if (e.type === 'operator_wait_start' && Number.isFinite(at)) open.set(`${e.run} ${e.role}`, at);
+    else if (e.type === 'operator_wait_end') { n.waited += Number(e.waitedMs) || 0; open.delete(`${e.run} ${e.role}`); }
+  }
+  for (const [key, at] of open) {
+    const stop = stops.get(key.slice(0, key.indexOf(' ')));
+    if (stop === undefined) n.untimed++;
+    else n.waited += Math.max(0, stop - at);
+  }
+  if (!n.owner && !n.council && !n.waited && !n.untimed) return null;
+  return [
+    `${plural(n.owner, 'decision')} by you${n.known ? ` (${n.recommended} of ${n.known} the recommended option)` : ''}`,
+    `${fmtDuration(n.waited)} waiting before you answered${n.untimed ? ` (plus ${plural(n.untimed, 'wait')} not timed: interrupted or still open)` : ''}`,
+    `${plural(n.council, 'decision')} by the council`,
+  ].join(' \u00b7 ');
+}
+
 export function compactionText(n) {
   const t = plural(n, 'compaction');
   return n >= 3 ? C.red(t) : n >= 1 ? C.yellow(t) : C.gray(t);

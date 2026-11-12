@@ -32,6 +32,14 @@ Progress signals are deterministic and come from files only (no model calls):
 They appear in the slice headings, the live working line, each result, a `progress` line after each slice,
 the startup header and `--status`.
 
+How much the topic has asked of you, from `relay/events.jsonl`, is shown by `--status` (`asked`) and in the
+completion summary: your decisions through the advisor, how many of them took the recommended option (among
+those where the option you chose was recorded by its number: an answer in your own words, or from an earlier
+relay version, is not in that count), the time the relay waited before you answered (until your first reply in
+the tab; a wait the relay stopped on counts until the stop; a wait whose end was not recorded, because Ctrl-C
+ended the relay or the wait is still open, is listed as not timed), and the council's decisions. Answers you give
+directly in a worker's tab count in the waiting time, not as decisions.
+
 The console shows a coloured, live view: a header per slice, each step and result, a running
 timer while a worker is busy, and highlighted boxes when it needs you. `relay/log.md` records the
 same events as plain text. Set `NO_COLOR=1` for plain console output.
@@ -65,6 +73,13 @@ the terminal. One case needs you: a relay killed during the moment it takes over
   recorded there with those four items. The project's own rules for decisions, where its instructions define
   them, take precedence.
 
+  **Later questions come back to you only when you asked.** A deferral, a decision or a council member's
+  condition that leaves something for later says who decides it then: the usual route (the council, where it
+  is enabled), and you only when you asked to be consulted on it or the project's rules reserve that question
+  to you. A standing rule for the rest of the topic ("handle every such case this way") can be granted by the
+  council when it only settles process or bookkeeping and weakens no check, lowers no evidence and changes no
+  result or acceptance; any other standing rule is yours.
+
   **Advisory council** (on by default; see Configuration). The relay can decide instead of waiting for you:
   - The advisor's brief also gives each option its exact `action` and its decision classes, and says whether
     the question needs you (`ownerNeeded`).
@@ -83,8 +98,10 @@ the terminal. One case needs you: a relay killed during the moment it takes over
     pointer to it. Later questions of the same worker step go to the council too. The advisor lists the
     earlier decisions a question would change (`revisits`), and the members see them: they may amend a
     council decision within its intent, while changing one of yours stays yours unless the project's rules
-    say otherwise. The council answers one such question per worker step, and at most three questions in
-    all per step: past that, the question comes to you.
+    say otherwise. The council keeps answering such questions while the step is not going round in circles:
+    a third question that would change the same decision (an amendment made in the step counts as the
+    decision it changed), or any question after six council decisions in one step, comes to you, saying that
+    the step is going round in circles.
     You get a notification, the decision is recorded as **Decided by the council** with the models, classes
     and reversibility, and the closing summary lists the run's council decisions. A later decision of yours
     can overrule it.

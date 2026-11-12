@@ -177,8 +177,9 @@ ${voteFormat(a.council.ids)}
 // would change, and the council decisions the same worker step already received.
 const AMEND_RULE = 'A council decision may be amended within its intent (resolving conditions that cannot be met together, or '
   + 'refining a detail it left open); one that reverses its intent, and any change to a decision of the owner\'s, needs the owner '
-  + '(set "ownerNeeded") unless the project\'s own rules let the council make it. The council answers one such question per '
-  + 'worker step; a second goes to the owner.';
+  + '(set "ownerNeeded") unless the project\'s own rules let the council make it. Within one worker step the council answers '
+  + 'at most two questions that change the same decision (its amendments in the step count as the same decision) and six '
+  + 'questions in all; past that, the step goes to the owner as going round in circles.';
 
 function earlierDecisions(b, earlier) {
   const lines = [];

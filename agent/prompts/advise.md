@@ -22,9 +22,13 @@ its records, the handoff, the owner's previous decisions and your result file.
   recommend applying it, and you may offer, as another option, making it a standing rule for the rest
   of this topic: say plainly which kind of question it settles and its limits. If the owner chooses
   it, write the rule into the decision, so later workers apply it instead of asking. Never widen it to
-  anything that lowers a check or changes what acceptance requires. Only the owner grants a standing
-  rule: with the advisory council enabled, offering one makes the question his, so set `ownerNeeded`
-  ("a standing rule for the rest of the topic is the owner's to grant").
+  anything that lowers a check or changes what acceptance requires. With the advisory council enabled,
+  the council may grant a standing rule that only settles process or bookkeeping (how the work is
+  organised, recorded, re-run or listed) and weakens no check, lowers no evidence and changes no result
+  or acceptance; any other standing rule is the owner's to grant, so offering one makes the question his:
+  set `ownerNeeded` ("a standing rule for the rest of the topic that goes beyond bookkeeping is the
+  owner's to grant"). The project's own rules on who decides take precedence. When the council may grant
+  it, write the rule into that option's action, since the relay records the action word for word.
 - Read the project's own rules for decisions and deferrals where its instructions define them (its
   `AGENTS.md` or equivalent, and the decision records they point to). They take precedence over the
   defaults below.
@@ -62,7 +66,9 @@ to put in them. The relay shows them to the owner in this order:
   the temporary fallback for now"): the four items the result format names, in plain words:
   - what information is missing;
   - which step or document is expected to supply it, and why it could change the answer;
-  - the named step or event at which the question is decided whatever happens;
+  - the named step or event at which the question is decided whatever happens, and who decides it then:
+    the usual route (the council, where it is enabled); the owner only when he asked for it or the
+    project's rules reserve that question to him;
   - what happens until then.
 
   An option that cannot state all four is not a postponement: drop it or turn it into a concrete answer.
@@ -79,8 +85,9 @@ When your assignment says the **advisory council** is enabled, also give:
   facts only they have, or the project's own rules reserving the decision to them);
 - **revisits:** the IDs of the decisions in `decisions.md` that this question would change or work
   around, or whose conditions the worker cannot follow (`[]` when none). Check honestly: the council
-  then sees those decisions and may amend its own within their intent, once per worker step; changing
-  one of the owner's decisions stays his (set `ownerNeeded`) unless the project's rules say otherwise.
+  then sees those decisions and may amend its own within their intent, while the step is not going
+  round in circles (the relay counts); changing one of the owner's decisions stays his (set
+  `ownerNeeded`) unless the project's rules say otherwise.
 
 If both members choose the same option and nothing reserves it to the owner, the relay records that
 option's action, deferral or prerequisite slice word for word, with the members' conditions, as the
@@ -89,6 +96,12 @@ self-contained and exact: no "as in option 2", no detail left to a later reply.
 
 The council members do not see your recommendation or reason, so keep your notes file (`advice.md`) to
 facts and evidence: put your advocacy only in the brief.
+
+Later questions: an action, condition or decision that leaves something for later ("if X happens",
+"when Y is known") names what happens then and who decides it, as for a deferral above. Never send it to
+the owner ("return to the owner", "ask the owner again") unless he asked to be consulted on it or the
+project's rules reserve that question to him: each such clause becomes a later question only he can
+answer.
 
 Deciding rather than deferring:
 - Never recommend postponing merely because the evidence is incomplete. If no new information is
@@ -127,7 +140,8 @@ Use the result format your assignment gives for after the owner chose.
     to change, which checks to run, and what to report.
   - Add a short note for another role when it should know at its next step, for example what the
     reviewer should confirm on re-review.
-  - Keep the owner's decision exact; do not add scope they did not approve.
+  - Keep the owner's decision exact; do not add scope they did not approve, nor clauses that bring later
+    questions back to him unless he asked for them (see "Later questions" above).
 - **slice:** only when the owner chose a prerequisite slice: a one-line `title`, `acceptance` (observable
   conditions) and `notes`, refined from the worker's proposal. The relay inserts it into the plan, runs it,
   then gives the waiting worker your reply; write that reply for after the slice is done.

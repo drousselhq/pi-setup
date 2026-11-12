@@ -3,7 +3,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { candidateTree, sliceBaseline } from './changes.mjs';
-import { C, callout, compactionText, emit, heading, log, out, purposeLabel, resetConsole, ROLE_COLOR, roleTag, setTTY, shortModel } from './console.mjs';
+import { C, callout, compactionText, emit, heading, log, out, ownerSummary, purposeLabel, resetConsole, ROLE_COLOR, roleTag, setTTY, shortModel } from './console.mjs';
 import { closeTabs } from './agents.mjs';
 import { checkCouncilConfig } from './council.mjs';
 import { replaceWorker } from './fresh.mjs';
@@ -59,6 +59,8 @@ export function printStatus() {
   const slices = parsePlan();
   out(`${C.bold(`pi-relay \u00b7 ${ctx.topic}`)}  ${C.gray(ctx.project)}`);
   out(`${C.gray('progress')}  ${progressText(progress())}`);
+  const asked = ownerSummary();
+  if (asked) out(`${C.gray('asked   ')}  ${asked}`);
   out('');
   const all = [...(fs.existsSync(ctx.plan) ? [] : [PLAN_SLICE]), ...slices, FINAL_SLICE];
   const titleWidth = Math.min(48, Math.max(...all.map((x) => x.title.length)));
@@ -159,8 +161,10 @@ export function main(args) {
   emit('run_complete', { head: git(['rev-parse', 'HEAD']), verification: 'pass' });
   log('relay complete: all slices done; the final verification passed', { quiet: true });
   const council = (state.councilDecisions ?? []).map((d) => `  ${d.id} (${d.slice}): ${d.title}`);
+  const asked = ownerSummary();
   callout(C.green, `Relay ${ctx.topic} complete`, ['All slices are done and the final verification passed.',
     ...(council.length ? [`Decided by the advisory council (in ${path.relative(ctx.project, ctx.decisions)}; yours to overrule):`, ...council] : []),
+    ...(asked ? [`Topic so far: ${asked}.`] : []),
     C.dim(`History: ${path.relative(ctx.project, ctx.logFile)}`)]);
   notify(`Relay ${ctx.topic} complete`, 'All slices are done and the final verification passed.');
   return 0;

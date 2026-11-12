@@ -419,6 +419,12 @@ test('--status shows done, current and set-aside slices without starting anythin
   assert.match(h.output, /S1\s+✓ done\s+First/);
   assert.match(h.output, /FINAL\s+✓ done/);
   assert.match(h.output, /slices 2\/2/);
+  assert.doesNotMatch(h.output, /by you/, 'no line about the owner when nothing was asked');
+  // A first wait cut by Ctrl-C (no end recorded) is still shown, as not timed.
+  fs.appendFileSync(p.file('relay/events.jsonl'), `${JSON.stringify({ t: '2026-01-01T00:00:00Z', run: 'old-1', type: 'operator_wait_start', role: 'implementer' })}\n`);
+  h.output = '';
+  assert.equal(h.run([TOPIC, '--status']), 0);
+  assert.match(h.output, /asked\s+0 decisions by you · 0s waiting before you answered \(plus 1 wait not timed: interrupted or still open\) · 0 decisions by the council/);
 });
 
 test('a nearly used 5-hour quota window pauses the next step until it resets', () => {

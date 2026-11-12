@@ -238,8 +238,10 @@ function deliver(worker, p, a, slice) {
   // A council decision is counted against the step it answered, in the slice's state (councilLimits()); whatever
   // rebuilds the step (resume, retry, the senior, --fresh) keeps its key.
   if (a.by === 'council' && !stepCouncilDecisions(p).includes(id)) {
-    c.councilAsked = { ...c.councilAsked, [stepKey(p)]: [...stepCouncilDecisions(p), id] };
-    if (a.brief.brief.revisits?.length) c.councilRevisited = { ...c.councilRevisited, [stepKey(p)]: id };
+    const key = stepKey(p);
+    c.councilAsked = { ...c.councilAsked, [key]: [...stepCouncilDecisions(p), id] };
+    const revisits = a.brief.brief.revisits ?? [];
+    if (revisits.length) c.councilRevisits = { ...c.councilRevisits, [key]: [...stepRevisits(key), { id, revisits }] };
   }
   if (final.slice) {
     const blocked = prerequisiteBlocked(slice);
@@ -279,19 +281,47 @@ function deliver(worker, p, a, slice) {
 }
 
 // The council decides later questions of a step too, an unrelated one as any other, and one that would change an
-// earlier decision (the advisor lists it in "revisits") once: a second such question, or a question after
-// COUNCIL_PER_STEP council decisions in the step, goes to the owner, so a worker cannot loop through the council.
-const COUNCIL_PER_STEP = 3;
+// earlier decision (the advisor lists it in "revisits") as long as the step is not going round in circles: a
+// third question that would change the same decision, counting the amendments made to it in this step as the
+// same decision, or any question after COUNCIL_PER_STEP council decisions in the step, goes to the owner.
+const COUNCIL_PER_STEP = 6;
+const CHANGES_PER_DECISION = 2;
 const stepCouncilDecisions = (p) => [].concat(state.cur.councilAsked?.[stepKey(p)] ?? []); // one id in older states
+
+// The council decisions of a step that changed earlier ones: [{ id, revisits }]. An earlier relay version kept
+// only the id of the one it allowed (councilRevisited), not what that one changed: it counts as one change of
+// every decision (any).
+function stepRevisits(key) {
+  const c = state.cur;
+  if (c.councilRevisits?.[key]) return c.councilRevisits[key];
+  const old = c.councilRevisited?.[key];
+  return old ? [{ id: old, revisits: [], any: true }] : [];
+}
+
+// The decisions that chains of amendments in the step started from: an amendment made in the step stands for
+// the decisions it changed.
+function origins(ids, changes, seen = new Set()) {
+  return [...new Set(ids.flatMap((id) => {
+    const change = changes.find((x) => x.id === id);
+    return !change || change.any || seen.has(id) ? [id] : origins(change.revisits, changes, new Set([...seen, id]));
+  }))];
+}
 
 function councilLimits(a, p) {
   const decided = stepCouncilDecisions(p);
-  const revisits = a.brief.brief.revisits ?? [];
-  const revisited = state.cur.councilRevisited?.[stepKey(p)];
+  const changes = stepRevisits(stepKey(p));
+  const circles = `this ${a.workerRole} step is going round in circles`;
+  // An earlier version's change (any) stands for every decision: a chain reaching it, or ending at it, counts all.
+  const any = new Set(changes.filter((x) => x.any).map((x) => x.id));
+  const again = origins(a.brief.brief.revisits ?? [], changes).flatMap((o) => {
+    const before = changes.filter((x) => any.has(o) || x.any || origins(x.revisits, changes).some((r) => r === o || any.has(r)))
+      .map((x) => x.id);
+    return before.length >= CHANGES_PER_DECISION
+      ? [`${circles}: this question would change ${o} again, after council decisions ${before.join(', ')} already changed it`] : [];
+  });
   return [
-    ...(revisits.length && revisited ? [`the ${a.workerRole} asked again to change an earlier decision (${revisits.join(', ')}), `
-      + `after council decision ${revisited} already changed one in this step`] : []),
-    ...(decided.length >= COUNCIL_PER_STEP ? [`the council already decided ${decided.length} questions of this ${a.workerRole} step (${decided.join(', ')})`] : []),
+    ...again,
+    ...(decided.length >= COUNCIL_PER_STEP ? [`${circles}: the council already decided ${decided.length} of its questions (${decided.join(', ')})`] : []),
   ];
 }
 
@@ -301,7 +331,8 @@ export function moveStepCounts(from, to) {
   const [a, b] = [stepKey(from), stepKey(to)];
   if (a === b) return;
   if (c.councilAsked?.[a]) c.councilAsked = { ...c.councilAsked, [b]: [...stepCouncilDecisions(to), ...[].concat(c.councilAsked[a])] };
-  if (c.councilRevisited?.[a]) c.councilRevisited = { ...c.councilRevisited, [b]: c.councilRevisited[a] };
+  const changes = stepRevisits(a);
+  if (changes.length) c.councilRevisits = { ...c.councilRevisits, [b]: [...stepRevisits(b), ...changes] };
 }
 
 // One step of a slice, the same across whatever rebuilds it: its role (the senior continues the implementer's
@@ -316,8 +347,8 @@ function stepKey(p) {
 function restartFinalAfter(id) {
   releaseAll();
   // The restarted final verification is the same step: it keeps the council counts (runSlice() restores them).
-  const { councilAsked, councilRevisited } = state.cur;
-  if (councilAsked) state.finalCouncil = { councilAsked, councilRevisited };
+  const { councilAsked, councilRevisited, councilRevisits } = state.cur;
+  if (councilAsked) state.finalCouncil = { councilAsked, councilRevisited, councilRevisits };
   state.cur = null;
   emit('slice_set_aside', { slice: 'FINAL', before: id, restart: true });
   log(`FINAL set aside: ${id} runs first; then the final verification starts again`, { quiet: true });

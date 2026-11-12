@@ -24,6 +24,10 @@ actions, the decision classes, the classes the owner keeps, the records to read 
   council decision within its intent: resolve conditions that cannot be met together, or settle a
   detail it left open. Reversing its intent, or changing an owner's decision, is the owner's (set
   `ownerNeeded`) unless the project's rules let the council do it.
+- An option may make its answer a standing rule for the rest of the topic. The council may grant one only
+  when it settles process or bookkeeping (how the work is organised, recorded, re-run or listed) and
+  weakens no check, lowers no evidence and changes no result or acceptance; otherwise it is the owner's
+  (set `ownerNeeded`), unless the project's rules say otherwise.
 - The options are listed in a neutral order. No option is recommended; judge each on its merits.
   You may propose a new option only if every listed one is clearly wrong.
 
@@ -48,11 +52,14 @@ a reasonable reviewer could differ, `low` when you are close to guessing.
 
 ## 4. Write your vote
 
-Write the vote file named in the assignment, in the format the assignment gives. Conditions only
-limit the chosen action; they never add scope. If both members choose the same option, the relay records
-its action and both members' conditions word for word as the binding decision and sends them to the
-waiting worker: write each condition as a self-contained limit the worker can check. The objection is the strongest case against your own
-choice, stated honestly.
+Write the vote file named in the assignment, in the format the assignment gives. Conditions only limit
+the chosen action; they never add scope. If both members choose the same option, the relay records its
+action and both members' conditions word for word as the binding decision and sends them to the waiting
+worker: write each condition as a self-contained limit the worker can check. A condition that leaves
+something for later names what happens then and who decides it: as any question, the council where it is
+enabled; never the owner ("return to the owner") unless he asked to be consulted on it or the project's
+rules reserve that question to him, since each such clause becomes a question only he can answer. The
+objection is the strongest case against your own choice, stated honestly.
 
 The owner summary follows the owner's register: no code identifiers, file names or rule numbers; short
 sentences; small numbers stated plainly. Everything else is for agents: exact and technical. The owner
