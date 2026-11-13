@@ -107,7 +107,11 @@ test('the owner decides when anything reserves the question, and sees why and wh
     });
     assert.equal(h.run(), 0);
     assert.match(h.output, /The advisory council sent this to you: /);
-    assert.match(h.output.replace(/\s+/g, ' '), new RegExp(why.source.replace(/ /g, '\\s+')));
+    const flat = h.output.replace(/\s*\u2503\s*/g, ' ').replace(/\s+/g, ' '); // the brief's box bars removed
+    assert.match(flat, new RegExp(why.source.replace(/ /g, '\\s+')));
+    const beforeBrief = flat.slice(flat.indexOf('sends the question to you'), flat.indexOf('Decision needed'));
+    assert.doesNotMatch(beforeBrief, new RegExp(why.source.replace(/ /g, '\\s+')), 'the reasons are shown once, in the brief');
+    assert.match(h.output, /council · sends the question to you; why is in the brief below/);
     assert.match(h.output, /council1 would choose (?:"[^"]+"|an option of its own) \(\w+ confidence\): I would/, 'each member\'s plain proposal is shown');
     assert.match(p.read('decisions.md'), /The owner chose A\.\n\n\*\*Decided by the owner\.\*\* It came to the owner because /);
     assert.ok(!/\.[.;]/.test(p.read('decisions.md')), 'reasons are joined without doubled punctuation');
@@ -161,7 +165,7 @@ test('an invalid vote is corrected once; a second failure, a vanished member or 
     h = new FakeHerdr(p, () => {});
     h.worker = mk(h);
     assert.equal(h.run(), 0, name);
-    assert.match(h.output.replace(/\s+/g, ' '), new RegExp(why.source.replace(/ /g, '\\s+')), name);
+    assert.match(p.read('decisions.md').replace(/\s+/g, ' '), new RegExp(why.source.replace(/ /g, '\\s+')), name);
     assert.match(p.read('decisions.md'), /\*\*Decided by the owner\.\*\*/, name);
   }
 
@@ -171,7 +175,7 @@ test('an invalid vote is corrected once; a second failure, a vanished member or 
   const handle = h.handle.bind(h);
   h.handle = (a) => (a[0] === 'agent' && a[1] === 'start' && a[2].includes('council2') ? h.err('provider', 'model unavailable') : handle(a));
   assert.equal(h.run(), 0);
-  assert.match(h.output.replace(/\s+/g, ' '), /council2 gave no usable vote \(could not start: Could not start council2: provider: model unavailable\)/);
+  assert.match(p.read('decisions.md').replace(/\s+/g, ' '), /council2 gave no usable vote \(could not start: Could not start council2: provider: model unavailable\)/);
   assert.match(p.read('decisions.md'), /\*\*Decided by the owner\.\*\*/);
 });
 
@@ -184,7 +188,7 @@ test('a member that keeps working past the time limit is dropped and the owner d
     return handle(a);
   };
   assert.equal(h.run(), 0);
-  assert.match(h.output.replace(/\s+/g, ' '), /council2 gave no usable vote \(no vote after/);
+  assert.match(p.read('decisions.md').replace(/\s+/g, ' '), /council2 gave no usable vote \(no vote after/);
   assert.match(p.read('decisions.md'), /\*\*Decided by the owner\.\*\*/);
 });
 

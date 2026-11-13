@@ -253,7 +253,8 @@ export function runCouncil(a, slice, earlier = []) {
     save();
     if (cn.outcome.owner) {
       emit('council_escalation', { reasons: cn.outcome.owner });
-      event(C.magenta('\u2696'), `${C.magenta('council')} ${C.dim('\u00b7 sends the question to you')}`, cn.outcome.owner.join('; '));
+      // The reasons are shown once, in the brief's notes (ownerNotes()), and kept in the event.
+      event(C.magenta('\u2696'), `${C.magenta('council')} ${C.dim('\u00b7 sends the question to you; why is in the brief below')}`);
     }
   }
   return cn.outcome;
