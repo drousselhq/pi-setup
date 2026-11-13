@@ -7,6 +7,29 @@ Herdr tabs one slice at a time.
 This checkout is where the setup is changed and committed. `scripts/install.mjs` copies `agent/` into
 `~/.pi/agent`, which every Pi session and relay run uses.
 
+## pi-relay at a glance
+
+You write a handoff (the outcome, the scope, the authority) in a conversation with `/handoff`; the relay, a
+deterministic script, then runs the work through fresh Pi workers in Herdr tabs, one slice at a time, and asks
+you only what it cannot settle. Its [README](agent/relay/README.md#how-it-works) shows the whole loop in six
+diagrams.
+
+```mermaid
+flowchart TD
+  you(["You: handoff.md"]) --> plan["planner: plan.md, a list of slices<br/>(or your own plan)"]
+  plan --> slice["Next slice"]
+  slice --> prep["scout, architect, acceptance tests<br/>(only as the slice needs)"]
+  prep --> impl["implementer: code, tests, commits"]
+  impl --> review["reviewer: independent review"]
+  review -- "changes required" --> repair["repair (a senior takes over<br/>after repeated loops)"] --> review
+  review -- accept --> more{"More slices?"}
+  more -- yes --> slice
+  more -- no --> final["final verification:<br/>the project's full checks"]
+  final --> done(["Complete"])
+  impl -. "a question" .-> ask["advisor's plain-language brief;<br/>a two-model council decides,<br/>or you do"]
+  ask -.-> impl
+```
+
 ## Contents
 
 | Path | What it is |
