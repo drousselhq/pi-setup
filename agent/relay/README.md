@@ -12,6 +12,135 @@ They use the `/plan`, `/scout`, `/architecture`, `/acceptance`, `/implement` and
 The implementer and reviewer keep their sessions for the whole slice; all tabs close when
 the slice is done. Session files are kept, and their paths are listed in `relay/state.json`.
 
+## How it works
+
+Six views of the same loop: who does what, the run, one worker step, one slice, a question, and the final
+verification. The script decides only by rules and by what workers write in their result files; every judgement
+is a worker's (or yours, or the council's). The diagrams show the default configuration (`commit: true`,
+escalation and the council on).
+
+### Who does what
+
+The relay is a deterministic Node script. It never calls a model itself: it writes an assignment, types one
+prompt into a worker's Herdr tab, waits, and reads back one JSON result file. Everything it knows is in files,
+so it can be stopped and resumed at any moment.
+
+```mermaid
+flowchart LR
+  you(["You"]) -- "handoff.md (/handoff), optional plan.md" --> topic[".agents_work/&lt;topic&gt;/"]
+  topic --> relay["pi-relay script<br/>(rules only, no model)"]
+  relay -- "relay/NNN-role.md assignment<br/>+ one prompt typed into the tab" --> worker["Worker: a Pi session<br/>in a Herdr tab<br/>(planner, scout, architect, acceptance,<br/>implementer, senior, reviewer,<br/>advisor, council members)"]
+  worker -- "code, tests, commits,<br/>slices/&lt;id&gt;/*.md records" --> repo[("Project checkout")]
+  worker -- "relay/NNN-role-step.result.json" --> relay
+  relay -- "state.json (resume point), log.md, events.jsonl,<br/>decisions.md; plan.md (inserted slices)" --> topic
+  relay -.->|"notification, brief in the advisor's tab"| you
+  you -.->|"answer in a tab, Ctrl-C, --fresh"| relay
+```
+
+### The run
+
+```mermaid
+flowchart TD
+  start(["pi-relay &lt;topic&gt;"]) --> lock["Take the topic's lock; load state.json;<br/>finish closing tabs released before a stop<br/>(running workers are kept and reused); check plan.md"]
+  lock --> plan{"plan.md exists?"}
+  plan -- no --> planner["PLAN: the planner writes plan.md<br/>from the handoff (checked before use)"]
+  planner --> next
+  plan -- yes --> next{"Next slice in file order<br/>(a slice set aside for a prerequisite<br/>resumes right after it)"}
+  next -- "a slice not done" --> slice["Run the slice<br/>(see 'One slice')"]
+  slice --> next
+  next -- "all slices done" --> final["FINAL: full verification<br/>(see 'The final verification')"]
+  final --> done(["Complete: summary with the council's<br/>decisions and how much you were asked"])
+  lock -.->|"any stop (exit 2): limit, bad plan, failed<br/>verification, uncommitted work, lost tab..."| stop(["Stopped: fix what the message names,<br/>run pi-relay &lt;topic&gt; again to resume"])
+```
+
+### One worker step
+
+Every box in 'One slice' and 'The final verification' that names a role is one such step. The advisor and
+the council members have their own waits (see 'A question').
+
+```mermaid
+flowchart TD
+  q["Next step queued in state.json<br/>(role, purpose, text)"] --> agent["Start the role's tab, or reuse it<br/>(implementer, senior and reviewer keep theirs for the slice)"]
+  agent --> assign["Write the assignment relay/NNN-role.md"]
+  assign --> quota["Quota gate: wait if the 5-hour or<br/>weekly subscription use is too high"]
+  quota --> send["Type the prompt once<br/>(after a restart: check it arrived, never type it twice)"]
+  send --> wait["Wait: live timer, turns and compactions from the<br/>session file; notify on a permission prompt"]
+  wait -- "result file written" --> valid{"Valid result?"}
+  valid -- "no (or idle without one), first time" --> nudge["Remind the worker once"] --> wait
+  valid -- "still not" --> youtab["You answer in the worker's tab<br/>(recorded as a 'Tab answer')"] --> wait
+  valid -- yes --> route["Route by status (next diagrams)"]
+  wait -- "compaction limit reached" --> runaway["Interrupt: an implementer's step goes to<br/>the senior; for any other role the relay stops"]
+```
+
+### One slice
+
+```mermaid
+flowchart TD
+  s(["Slice start: base = current commit"]) --> prep{"Needs: scout / architecture /<br/>acceptance?"}
+  prep -- "each, in that order" --> preps["scout: repository facts<br/>architect: consequential design<br/>acceptance: tests written before the code<br/>(new files only, snapshotted)"]
+  preps --> impl
+  prep -- none --> impl["implementer: implement until the<br/>acceptance is met and focused checks pass"]
+  impl -- "needs-scout / needs-architecture" --> help["scout or architect answers the question<br/>(more than 2 such requests per slice: stop)"] --> impl
+  impl -- "needs-decision" --> dec["A question<br/>(see 'A question')"] --> impl
+  impl -- "blocked" --> you1["You answer in the tab"] --> impl
+  impl -- done --> stray{"Uncommitted changes<br/>from this slice?"}
+  stray -- "yes, first time" --> commit["Worker commits what belongs<br/>to the slice"] --> stray
+  stray -- "yes, again" --> stop1(["Stop: lists the files"])
+  stray -- no --> review["reviewer: independent review of base..HEAD<br/>(told which acceptance tests changed)"]
+  review -- accept --> sdone(["Slice done: commits recorded, tabs closed"])
+  review -- "changes-required (findings R1...)" --> loop{"Review loops so far"}
+  loop -- "before the escalation point" --> repair["implementer repairs the findings"] --> stray
+  loop -- "escalation point: 2 loops by default,<br/>or a finding came back" --> senior["senior: a fresh session takes over the slice;<br/>it repairs this and every later loop<br/>in the same session"] --> stray
+  loop -- "limit: escalation point + 2 more<br/>loops by default" --> stop2(["Stop: re-running allows more loops"])
+```
+
+The reviewer's own questions (`needs-decision`, `needs-architecture`) and `blocked` are handled the same way as
+the implementer's, and after a question the worker continues the same step in the same session. With
+`commit: false`, nothing is committed: the uncommitted-changes check is skipped and the reviewer reads the
+working tree.
+
+### A question
+
+A worker that needs a decision writes `needs-decision` with its question and options.
+
+```mermaid
+flowchart TD
+  ask(["Worker: needs-decision"]) --> adv["advisor: reads the records; writes a plain-language brief<br/>(options, ★ recommendation, each option's exact action,<br/>its decision classes, ownerNeeded, revisits)"]
+  adv --> chk{"Brief complete? (deferrals name what is missing,<br/>who supplies it, the decision point, the interim)"}
+  chk -- "no, first time" --> adv
+  chk -- "still not" --> direct(["You answer the worker's own question<br/>in the worker's tab (a 'Tab answer')"])
+  chk -- yes --> yours{"Yours anyway? ownerNeeded, a class you keep<br/>(E to I by default), or the step going round in circles"}
+  yours -- yes --> owner
+  yours -- no --> council["Two council members, different models, vote<br/>independently on the options in a neutral order,<br/>without the advisor's recommendation"]
+  council --> agree{"Two valid votes for the same listed option,<br/>no class you keep, not irreversible,<br/>not both low confidence, nobody flags you?"}
+  council -.->|"a member fails to start, gives no valid vote<br/>after one reminder, or times out"| owner
+  agree -- yes --> cdec["Council decision: the relay records it from the vote<br/>(option, action, members' conditions) in decisions.md"]
+  agree -- no --> owner["You: the brief, with the votes, in the advisor's tab;<br/>answer with a number or ask questions"]
+  owner --> odec["Your decision recorded in decisions.md"]
+  cdec --> deliver
+  odec --> deliver{"Prerequisite slice chosen?"}
+  deliver -- no --> reply(["Reply delivered to the waiting worker;<br/>notes for other roles at their next step"])
+  deliver -- "yes, and the slice has no commits<br/>or changes yet" --> pre(["New slice inserted before the current one (e.g. S2b);<br/>current slice set aside, resumed after it<br/>with the same workers"])
+  deliver -- "yes, during FINAL before it changed anything" --> prefinal(["Slice added after the plan's last slice;<br/>it runs, then the final verification starts again"])
+  deliver -- "yes, otherwise (changes, planning)" --> prestop(["Stop, with advice: add the slice by hand"])
+```
+
+### The final verification
+
+```mermaid
+flowchart TD
+  f(["FINAL"]) --> run["implementer: the project's full verification<br/>on the whole candidate; reports pass or fail"]
+  run -- fail --> stopf(["Stop: fix or decide, re-run;<br/>the same worker verifies again"])
+  run -- pass --> changed{"Changes the reviewer has not accepted?<br/>(files FINAL changed, or a candidate<br/>after a rejected review)"}
+  changed -- yes --> rev["reviewer reviews the change"]
+  rev -- "changes-required" --> repair["implementer (or senior) repairs, then runs the<br/>full verification again (review loops as in 'One slice')"] --> run
+  rev -- accept --> seen
+  changed -- no --> seen{"A pass seen in this run,<br/>for the files exactly as they are now?"}
+  seen -- yes --> complete(["Complete"])
+  seen -- "no (restart, or files changed after it)" --> again["Verify again (once)"] --> run
+  again -.->|"changed again"| stopg(["Stop, naming the files"])
+```
+
 ## Usage
 
 ```
