@@ -14,6 +14,63 @@ deterministic script, then runs the work through fresh Pi workers in Herdr tabs,
 you only what it cannot settle. Its [README](agent/relay/README.md#how-it-works) shows the whole loop in six
 diagrams.
 
+### An example
+
+A small tool, [`slugify`](docs/example/handoff.md) (`"Hello, World!"` → `hello-world`), from a real run. The
+handoff leaves one choice open on purpose (accented letters), so the run asks for a decision:
+
+<details>
+<summary><code>handoff.md</code> (excerpt)</summary>
+
+```markdown
+## Outcome
+A Node.js tool that turns text into a URL slug: `slugify "Hello, World!"` prints `hello-world`. It is used by
+a static site generator to name pages, so the same input must always give the same slug.
+
+## Agreed behaviour
+- Lower case; runs of anything other than letters and digits become one `-`; no `-` at either end.
+- Empty input (or input with no letters or digits) prints nothing and exits with status 1.
+
+## Open question
+Accented letters (`Crème brûlée`): keep them (`crème-brûlée`) or reduce them to plain letters
+(`creme-brulee`). The implementer asks for a decision before writing that part.
+
+## Acceptance
+- `node --test` passes, covering the agreed behaviour, the decided accent rule and empty input.
+- `echo "Hello, World!" | node bin/slugify.js` prints `hello-world`.
+
+## Authority
+Commit locally on the current branch; never push. No new dependencies.
+```
+</details>
+
+<details>
+<summary><code>plan.md</code></summary>
+
+```markdown
+# Plan: slugify
+
+## S1: The slugify function
+Needs: none
+Acceptance:
+- `slugify` in `src/slugify.js` implements the agreed behaviour and the decided accent rule.
+- Unit tests cover them and empty input; `node --test` passes.
+
+## S2: The command
+Needs: none
+Acceptance:
+- `bin/slugify.js` reads its arguments, or standard input when there are none, and prints the slug.
+- Empty input prints nothing and exits with status 1; a test covers both paths.
+```
+</details>
+
+The console during the first slice: the question, the advisor's brief you answer (here the advisor judged it
+yours, since a published address format is hard to change), your decision, then implementation and review.
+
+![The pi-relay console during the first slice of the slugify example](docs/relay-console.png)
+
+### The loop
+
 ```mermaid
 flowchart TD
   you(["You: handoff.md"]) --> plan["planner: plan.md, a list of slices<br/>(or your own plan)"]
@@ -40,6 +97,7 @@ flowchart TD
 | `agent/skills/agent-work/` | Conventions for `.agents_work/<topic>/` folders and role records |
 | `agent/extensions/` | Herdr agent-state and Moshi notification extensions, plus package settings |
 | `agent/relay/` | `pi-relay`: script, role and model configuration, and its [README](agent/relay/README.md) |
+| `docs/` | The example handoff, plan and console screenshot shown above (not installed) |
 | `scripts/install.mjs` | Installs `agent/` into `~/.pi/agent`, refusing to overwrite files changed in place |
 | `test/` | Tests (`npm test`) |
 
