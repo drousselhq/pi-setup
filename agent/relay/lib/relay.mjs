@@ -8,12 +8,12 @@ import { closeTabs } from './agents.mjs';
 import { checkCouncilConfig } from './council.mjs';
 import { replaceWorker } from './fresh.mjs';
 import { realIo } from './io.mjs';
-import { checkPlan, FINAL_SLICE, nextSlice, parsePlan, PLAN_SLICE, planSummary, progress, progressText, sliceProgress } from './plan.mjs';
+import { checkPlan, FINAL_SLICE, nextSlice, parsePlan, PLAN_SLICE, planSize, planSummary, progress, progressText, sliceProgress } from './plan.mjs';
 import { resumeSetAside, setAsideForEarlierSlice } from './prerequisites.mjs';
 import { usageCache } from './quota.mjs';
 import { cfg, ctx, git, herdr, io, notify, plural, RelayStop, RUN_ID, setCfg, setIo, setRunId, setState, state } from './runtime.mjs';
 import { collect, queue, send } from './steps.mjs';
-import { acquireLock, loadState, save, setup } from './store.mjs';
+import { acquireLock, loadState, save, setup, setupVersion } from './store.mjs';
 import { currentSlice, firstMessage, transition } from './transitions.mjs';
 import { sessionCache } from './usage.mjs';
 
@@ -33,7 +33,7 @@ export function runSlice(slice) {
       ...(slice.id === 'FINAL' ? state.finalCouncil : {}), // a restarted final verification keeps its council counts
     };
     if (slice.id === 'FINAL') delete state.finalCouncil;
-    emit('slice_start', { title: slice.title, needs: slice.needs, base: state.cur.base });
+    emit('slice_start', { title: slice.title, needs: slice.needs, base: state.cur.base, plan: planSize() });
     log(`${slice.id} start: ${slice.title}`, { quiet: true });
     heading(`${slice.id}  ${slice.title}`, sliceProgress(slice));
     queue(firstMessage(slice));
@@ -146,7 +146,7 @@ export function main(args) {
   emit('run_start', {
     project: ctx.project, resumed: Boolean(state.cur), head: git(['rev-parse', 'HEAD']),
     roles: cfg.roles, commit: Boolean(cfg.commit), maxRepairCycles: cfg.maxRepairCycles ?? 3, quota: cfg.quota ?? null,
-    council: cfg.council?.enabled ? cfg.council : null,
+    council: cfg.council?.enabled ? cfg.council : null, setup: setupVersion(), plan: planSize(),
   });
   log(`relay started in ${ctx.project} (topic ${topic})`, { quiet: true });
   banner();

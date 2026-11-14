@@ -1,10 +1,14 @@
 // Scorecard: the detail tables of one topic (per slice, role and model), with what the records cover.
 
 import { quotaChange, stepShares } from './costs.mjs';
-import { latency, waited } from './measures.mjs';
+import { codeVersions, latency, waited } from './measures.mjs';
 import { cohort, finalText, hours, iso, median, money } from './report.mjs';
 
-function notes(s) {
+const one = (set) => (set.size === 1 && !['none', 'unknown'].includes([...set][0]) ? String([...set][0]) : null);
+
+function notes(s, topic) {
+  const code = codeVersions(topic, s);
+  const prompts = s.promptVersions;
   return [
     s.doneAt === null && (s.startAt !== null ? 'no completion on record' : 'no start on record'),
     s.starts > 1 && `${s.starts} attempts (earlier ones ${money(s.supersededUsd ?? 0)})`,
@@ -16,7 +20,8 @@ function notes(s) {
     Object.keys(s.nudges).length && `nudges ${Object.entries(s.nudges).map(([k, v]) => `${v} ${k}`).join(', ')}`,
     s.ambiguous && `${s.ambiguous} results of one step without a new send (ambiguous)`,
     s.revisits.proposed && `${s.revisits.proposed} revisits proposed`, Number.isFinite(s.lines) && `${s.lines} lines changed`,
-    s.versions.size && `version ${[...s.versions].join(' + ')}`,
+    (one(code) || code.size > 1) && `relay code ${[...code].join(' + ')}`,
+    (one(prompts) || prompts.size > 1) && `worker prompts ${[...prompts].join(' + ')}`,
   ].filter(Boolean).join('; ');
 }
 
@@ -32,18 +37,18 @@ export function detail(r, { eventsFile = null } = {}) {
   const q = quotaChange(topic.quota);
   const span = topic.quota.length ? [topic.quota[0].at, topic.quota.at(-1).at] : null;
   const anthropic = span ? topic.cost.entries.filter(([at, , pv]) => pv === 'anthropic' && at >= span[0] && at <= span[1]).reduce((n, [, x]) => n + x, 0) : 0;
-  const versioned = slices.filter((s) => s.versions.size).length;
+  const known = (f) => slices.filter((s) => one(f(s))).length;
   const out = [`## ${topic.name}`, '',
     `Records: ${eventsFile ?? 'events'} up to ${iso(topic.cutoffMs)}; ${topic.runs.length} relay runs; ${topic.sessions.size} sessions`
     + ` named by its agent_start events (${topic.cost.missing} missing, ${topic.cost.unreadable} with unreadable lines). Models by role: ${roleModels(topic)}.`
-    + ` Relay version recorded for ${versioned} of ${slices.length} slices. Dollar figures are Pi-recorded price equivalents. Times are UTC.`, '',
+    + ` One known installed version for ${known((s) => codeVersions(topic, s))} of ${slices.length} slices' relay code and ${known((s) => s.promptVersions)} of their worker prompts. Dollar figures are Pi-recorded price equivalents. Times are UTC.`, '',
     '| Slice | Title | Latency | Loops | First review | Back after repair | Esc. | You | Council | Waited | Cost | Review cycles | Notes |',
     '|---|---|---|---|---|---|---|---|---|---|---|---|---|'];
   for (const s of slices) {
     const l = latency(s);
     out.push(`| ${s.id} | ${(s.title ?? '').slice(0, 40)} | ${l === null ? '–' : hours(l)} | ${s.loops} | ${s.firstReview ?? 'unknown'}`
       + ` | ${s.returning.size} | ${s.escalations} | ${s.ownerDecisions} | ${s.councilDecisions} | ${hours(waited(s))}`
-      + ` | ${money(s.cost.costUsd)} | ${money(stepShares(s).reviewCycleUsd)} | ${notes(s)} |`);
+      + ` | ${money(s.cost.costUsd)} | ${money(stepShares(s).reviewCycleUsd)} | ${notes(s, topic)} |`);
   }
   out.push('', '| Role | Cost | Calls | Cache warming | Compactions |', '|---|---|---|---|---|');
   for (const [role, k] of Object.entries(topic.cost.byRole).sort((a, b) => b[1].costUsd - a[1].costUsd)) {

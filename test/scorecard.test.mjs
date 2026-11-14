@@ -4,7 +4,8 @@ import { test } from 'node:test';
 import { fmtDuration, ownerSummary } from '../agent/relay/lib/console.mjs';
 import { ctx } from '../agent/relay/lib/runtime.mjs';
 import { addCosts, quotaChange, stepShares } from '../scripts/scorecard/costs.mjs';
-import { analyzeTopic, latency } from '../scripts/scorecard/measures.mjs';
+import { detail } from '../scripts/scorecard/detail.mjs';
+import { analyzeTopic, codeVersions, latency } from '../scripts/scorecard/measures.mjs';
 import { readEvents, readSession } from '../scripts/scorecard/records.mjs';
 import { assistant, at, readFake, T0, tmp, topicEvents, writeLines } from './scorecard-fixture.mjs';
 
@@ -130,4 +131,29 @@ test('quota change: positive steps within a reset window only, by day', () => {
   assert.equal(q.points, 61 + 4 + 2);
   assert.equal(q.windows, 3);
   assert.deepEqual(q.byDay, { '2026-11-01': 5, '2026-11-02': 60, '2026-11-03': 2 });
+});
+
+test('versions: the relay code from every run of a slice, the worker prompts from its new sessions', () => {
+  let n = 0;
+  const ev = (run, type, fields = {}) => ({ t: at(n++), run, slice: null, type, ...fields });
+  const r = analyzed([
+    ev('r1', 'run_start', { setup: { commit: 'A' } }),
+    ev('r1', 'slice_start', { slice: 'S1' }),
+    ev('r1', 'agent_start', { slice: 'S1', role: 'implementer', session: 'imp1', setup: { commit: 'B' } }),
+    ev('r1', 'slice_done', { slice: 'S1' }),
+    ev('r1', 'slice_start', { slice: 'S2' }),
+    ev('r1', 'agent_start', { slice: 'S2', role: 'implementer', session: 'rev2', setup: null }),
+    ev('r1', 'run_stop', { kind: 'stop' }),
+    ev('r2', 'run_start', { slice: 'S2', resumed: true, setup: { commit: 'C' } }),
+    ev('r2', 'agent_start', { slice: 'S2', role: 'implementer', session: 'rev2', resumedSession: true, setup: { commit: 'C' } }),
+    ev('r2', 'slice_done', { slice: 'S2' }),
+  ]);
+  assert.deepEqual([...codeVersions(r.topic, slice(r, 'S1'))], ['A'], 'the run started before the slice');
+  assert.deepEqual([...slice(r, 'S1').promptVersions], ['B']);
+  assert.deepEqual([...codeVersions(r.topic, slice(r, 'S2'))], ['A', 'C'], 'two runs: mixed');
+  assert.deepEqual([...slice(r, 'S2').promptVersions], ['none'], 'a resumed session adds no version; null is no manifest');
+  const out = detail(r);
+  assert.match(out, /One known installed version for 1 of 2 slices' relay code and 1 of their worker prompts/);
+  assert.match(out, /\| S1 \|.*relay code A; worker prompts B \|/);
+  assert.match(out, /\| S2 \|.*relay code A \+ C \|/);
 });

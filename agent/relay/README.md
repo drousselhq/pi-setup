@@ -348,10 +348,10 @@ One JSON object per line. Every event has `t`, `run` (one ID per relay process),
 
 | type | extra fields |
 |---|---|
-| `run_start` | project, resumed, head, roles (models/thinking), commit, maxRepairCycles, quota, council (when enabled) |
-| `slice_start` / `slice_done` | title, needs, base / head, commits, repairCycles, helpRequests, durationMs |
+| `run_start` | project, resumed, head, roles (models/thinking), commit, maxRepairCycles, quota, council (when enabled), setup (the installed commit and time, read from the install manifest when the relay starts, so the relay code this run uses; null without a manifest, `error` when it is unreadable; an interrupted install can leave files newer than it says), plan (slice and acceptance-item counts; null without a readable plan) |
+| `slice_start` / `slice_done` | title, needs, base, plan / head, commits, repairCycles, helpRequests, durationMs |
 | `slice_set_aside` / `slice_resumed` | slice, before, restart (true when the final verification starts again after the slice) / before, base |
-| `agent_start` | role, agent, model, thinking, session (Pi session file), tab, resumedSession |
+| `agent_start` | role, agent, model, thinking, session (Pi session file), tab, resumedSession, setup (the manifest read when the worker starts: the role prompt it got; a resumed session keeps its first start's, or an `error` when that is not on record) |
 | `agent_start_recovered` | role, agent, tab (a worker whose start was interrupted, closed before starting anew) |
 | `step_sent` / `step_result` | role, purpose / status, verdict, blocking, summary, question, verification, checks, durationMs, usage |
 | `operator_wait_start` / `operator_wait_end` | role, status, question / waitedMs |

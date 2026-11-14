@@ -1,8 +1,10 @@
 // What the relay's records keep for later evaluation (the whole brief, the option chosen, the slice a decision
 // belongs to), and what workers are told about asking.
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
 import { test } from 'node:test';
-import { FakeHerdr, brief, decision, makeProject, standard } from './harness.mjs';
+import { FakeHerdr, StopRelay, brief, decision, makeProject, standard } from './harness.mjs';
 
 const ONE = '# Plan\n\n## S1: Only\nNeeds: none\nAcceptance:\n- x\n';
 const TWO = '# Plan\n\n## S1: First\nNeeds: none\nAcceptance:\n- one\n\n## S2: Second\nNeeds: none\nAcceptance:\n- two\n';
@@ -99,4 +101,57 @@ test('without maxCompactionsPerStep in the configuration, the compaction limit i
   const h = new FakeHerdr(p, standard);
   assert.equal(h.run(), 0);
   assert.match(h.prompts[0].assignment().replace(/\s+/g, ' '), /compacts 2 times/);
+});
+
+test('the records name the installed setup and the plan\'s size; without a readable manifest or plan they say so', () => {
+  const p = makeProject({ plan: TWO });
+  fs.writeFileSync(path.join(p.root, '.pi-setup-install.json'), JSON.stringify({ commit: 'abc1234', installedAt: '2026-11-14T00:00:00Z', files: {} }));
+  assert.equal(new FakeHerdr(p, standard).run(), 0);
+  const events = p.events();
+  const start = events.find((e) => e.type === 'run_start');
+  assert.deepEqual(start.setup, { commit: 'abc1234', installedAt: '2026-11-14T00:00:00Z' });
+  assert.deepEqual(start.plan, { slices: 2, acceptance: 2 });
+  assert.deepEqual(events.find((e) => e.type === 'slice_start' && e.slice === 'S1').plan, { slices: 2, acceptance: 2 });
+  const agents = events.filter((e) => e.type === 'agent_start');
+  assert.ok(agents.length >= 2 && agents.every((e) => e.setup?.commit === 'abc1234'), 'every worker start names the prompts it got');
+
+  const q = makeProject({ plan: null });
+  fs.writeFileSync(path.join(q.root, '.pi-setup-install.json'), '{ not json');
+  const planner = (c) => {
+    if (c.role !== 'planner') return standard(c);
+    fs.writeFileSync(q.file('plan.md'), ONE);
+    return c.write({ status: 'done', summary: 'planned' });
+  };
+  assert.equal(new FakeHerdr(q, planner).run(), 0, 'an unreadable manifest never stops a run');
+  const qStart = q.events().find((e) => e.type === 'run_start');
+  assert.match(qStart.setup.error, /^unreadable install manifest/);
+  assert.equal(qStart.plan, null, 'no plan yet: the planner writes it');
+
+  const r = makeProject({ plan: ONE });
+  assert.equal(new FakeHerdr(r, standard).run(), 0);
+  assert.equal(r.events().find((e) => e.type === 'run_start').setup, null, 'no manifest: a run from a checkout');
+
+  const d = makeProject({ plan: `${ONE}\n## S1: Again\nNeeds: none\nAcceptance:\n- y\n` });
+  const dh = new FakeHerdr(d, standard);
+  assert.equal(dh.run(), 2, 'a plan naming a slice twice stops the run as before');
+  assert.equal(d.events().find((e) => e.type === 'run_start').plan, null, 'and its size is not recorded, without a different stop');
+  assert.match(d.events().find((e) => e.type === 'run_stop').reason, /defines slice S1 twice/);
+});
+
+test('a worker session resumed after an install keeps the version of its first start', () => {
+  const p = makeProject({ plan: ONE });
+  const manifest = (commit) => fs.writeFileSync(path.join(p.root, '.pi-setup-install.json'), JSON.stringify({ commit, installedAt: 't', files: {} }));
+  manifest('A');
+  let stop = true;
+  const h = new FakeHerdr(p, (c) => {
+    if (c.role === 'reviewer' && stop) { stop = false; throw new StopRelay('Ctrl-C during the review'); }
+    return standard(c);
+  });
+  assert.equal(h.run(), 1);
+  for (const a of h.agents.values()) if (a.role === 'reviewer') a.alive = false; // its process ended meanwhile
+  manifest('B');
+  assert.equal(h.run(), 0);
+  const reviewers = p.events().filter((e) => e.type === 'agent_start' && e.role === 'reviewer');
+  assert.deepEqual(reviewers.map((e) => [e.resumedSession, e.setup.commit]), [[false, 'A'], [true, 'A']]);
+  assert.equal(p.events().filter((e) => e.type === 'run_start').at(-1).setup.commit, 'B', 'the relay code is the new install');
 });

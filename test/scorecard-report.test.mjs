@@ -66,7 +66,7 @@ test('detail: notes per slice, costs outside slices, the final verification and 
   assert.match(out, /\| imp1 \| S1 \| implementer \| \$10 \|/);
   assert.match(out, /\| gone3 \| S3 \| implementer \| missing \|/);
   assert.match(out, /Final verification: 1 run: verification not recorded; relay completions recorded: none/);
-  assert.match(out, /Models by role: implementer p\/impl-model, reviewer p\/rev-model\. Relay version recorded for 0 of 4 slices/);
+  assert.match(out, /Models by role: implementer p\/impl-model, reviewer p\/rev-model\. One known installed version for 0 of 4 slices' relay code and 0 of their worker prompts/);
 });
 
 test('several topics: a table first; bad input is refused with a clear message', () => {

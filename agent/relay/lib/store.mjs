@@ -35,6 +35,20 @@ export function setup(topic) {
   loadState();
 }
 
+// The install manifest of the setup this relay runs from (scripts/install.mjs writes it next to relay/): the commit
+// installed and when, for the records. null when there is none (a checkout, tests); an unreadable one is
+// recorded as such and never stops a run.
+export function setupVersion() {
+  const file = path.join(path.dirname(io.relayHome ?? RELAY_HOME), '.pi-setup-install.json');
+  try {
+    if (!fs.existsSync(file)) return null;
+    const m = JSON.parse(fs.readFileSync(file, 'utf8'));
+    return { commit: m.commit ?? null, installedAt: m.installedAt ?? null };
+  } catch (e) {
+    return { commit: null, error: `unreadable install manifest: ${e.message}` };
+  }
+}
+
 // Reads state.json (again after taking the lock: another relay may have written it meanwhile).
 export function loadState() {
   setState(readJson(ctx.stateFile, { seq: 0, slices: {}, cur: null, sessions: [] }));

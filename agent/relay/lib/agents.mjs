@@ -3,7 +3,7 @@
 import { createHash } from 'node:crypto';
 import { C, emit, event, live, log, roleTag, shortModel } from './console.mjs';
 import { cfg, ctx, herdr, RelayStop, sleep, state } from './runtime.mjs';
-import { save } from './store.mjs';
+import { save, setupVersion } from './store.mjs';
 
 export function agentAlive(a) {
   const r = herdr(['agent', 'get', a.name], { allowFail: true });
@@ -61,9 +61,16 @@ export function startAgent(role, resumeSession) {
   }
   agent.session = res.agent.agent_session?.value ?? null;
   delete agent.starting;
-  state.sessions.push({ slice: state.cur.slice, role, name: agent.name, session: agent.session, model: rc.model, thinking: rc.thinking });
+  // The setup the worker's role prompt came from: read now for a new session; a resumed session keeps the one
+  // recorded at its first start (unknown when that start predates the record).
+  const first = resumeSession ? state.sessions.find((s) => s.session === resumeSession && s.setup !== undefined) : null;
+  const setup = !resumeSession ? setupVersion() : first ? first.setup : { commit: null, error: 'resumed session: its first start has no version on record' };
+  state.sessions.push({ slice: state.cur.slice, role, name: agent.name, session: agent.session, model: rc.model, thinking: rc.thinking, setup });
   save();
-  emit('agent_start', { role, agent: agent.name, model: rc.model, thinking: rc.thinking ?? 'medium', session: agent.session, tab: agent.tab, resumedSession: Boolean(resumeSession) });
+  emit('agent_start', {
+    role, agent: agent.name, model: rc.model, thinking: rc.thinking ?? 'medium', session: agent.session, tab: agent.tab,
+    resumedSession: Boolean(resumeSession), setup,
+  });
   log(`${state.cur.slice} started ${role} (${rc.model} ${rc.thinking ?? 'medium'}) in tab "${label}"${resumeSession ? ' resuming its session' : ''}`, { quiet: true });
   event(C.gray('▸'), `${roleTag(role)} ${C.dim(`started · ${shortModel(rc.model)} ${rc.thinking ?? 'medium'}${resumeSession ? ' · resumed session' : ''} · tab "${label}"`)}`);
   return agent;

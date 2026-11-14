@@ -17,8 +17,18 @@ function newSlice(id) {
     escalations: 0, nudges: {}, runaways: 0, acceptanceStep: false, acceptanceChanged: new Set(), ownerDecisions: 0,
     chosenKnown: 0, chosenRecommended: 0, councilDecisions: 0, councilReturned: 0,
     revisits: { known: 0, proposed: 0, owner: 0, council: 0 }, waits: {}, waitedByStatus: {}, untimedWaits: 0,
-    pausedMs: 0, untimedPauses: 0, gapMs: 0, versions: new Set(), plan: null, verifications: [], finalFindings: 0,
+    pausedMs: 0, untimedPauses: 0, gapMs: 0, runIds: new Set(), promptVersions: new Set(), plan: null, verifications: [],
+    finalFindings: 0,
   };
+}
+
+// A recorded setup's version: its commit, 'none' (no manifest), or 'unknown' (not recorded, or unreadable).
+const version = (setup) => (setup === undefined ? 'unknown' : setup === null ? 'none' : setup.commit ?? 'unknown');
+
+// The relay code a slice ran under: the versions of every run that emitted one of its events.
+export function codeVersions(topic, s) {
+  const byRun = new Map(topic.runs.map((r) => [r.run, version(r.setup)]));
+  return new Set([...s.runIds].map((id) => byRun.get(id) ?? 'unknown'));
 }
 
 export function analyzeTopic(name, events) {
@@ -48,12 +58,12 @@ export function analyzeTopic(name, events) {
     const at = ms(e.t);
     const s = get(e.slice ?? null, e.type);
     if (s && s.firstAt === null) s.firstAt = at;
+    if (s) s.runIds.add(e.run);
     switch (e.type) {
       case 'run_start':
         // The gap since the previous run's last event: unclassified (workers may have gone on working).
         if (s && lastEvent && lastEvent.run !== e.run && lastEvent.slice === e.slice) s.gapMs += at - ms(lastEvent.t);
         topic.runs.push({ run: e.run, at, roles: e.roles ?? null, setup: e.setup });
-        if (s && e.setup !== undefined) s.versions.add(e.setup?.commit ?? 'none');
         break;
       case 'slice_start':
         s.starts++; s.startAt = at; s.title = e.title; s.base = e.base ?? s.base;
@@ -73,7 +83,7 @@ export function analyzeTopic(name, events) {
         s.roles.add(e.role);
         if (e.agent) s.agents.add(e.agent);
         if (!e.session) s.partial.push(`${e.role}: no session recorded`);
-        if (e.setup !== undefined && !e.resumedSession) s.versions.add(e.setup?.commit ?? 'none');
+        if (!e.resumedSession) s.promptVersions.add(version(e.setup));
         if (e.role === 'acceptance') s.acceptanceStep = true;
         break;
       case 'step_sent': if (s) { s.sentSinceResult = true; if (e.agent) s.sentAgent[e.role] = e.agent; } break;

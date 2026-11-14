@@ -146,6 +146,16 @@ export const FINAL_SLICE = {
 
 // ---------- slice order ----------
 
+// The plan's size for the records, or null when there is no readable plan (a measurement never stops a run).
+export function planSize() {
+  try {
+    const slices = parsePlan();
+    return slices.length ? { slices: slices.length, acceptance: slices.reduce((n, s) => n + s.acceptance, 0) } : null;
+  } catch {
+    return null;
+  }
+}
+
 export function nextSlice() {
   if (!state.slices.PLAN && !fs.existsSync(ctx.plan)) return PLAN_SLICE;
   checkPlan(); // plan.md may have been edited since the run started
