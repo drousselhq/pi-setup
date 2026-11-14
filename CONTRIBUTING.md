@@ -15,7 +15,9 @@ Coding agents also follow [AGENTS.md](AGENTS.md).
    every Pi session and every relay run.
 2. Run `npm test`.
 3. For relay changes, also run a real smoke test (below).
-4. Commit. Messages: a short subject, then one `-` bullet per real change.
+4. Commit. Messages: a short subject, then one `-` bullet per real change. A change meant to change
+   outcomes (quality, the owner's involvement, time or cost) gets a row in [EVALUATION.md](EVALUATION.md)
+   first and a bullet `Evaluation: E<n> (EVALUATION.md)`.
 5. Install with `node scripts/install.mjs` when the change should take effect. Installing is the release
    step; check first with `--check`. A relay that is already running keeps the code it started with.
    Each file is replaced atomically, but not the release as a whole: if an install is interrupted, run
@@ -57,7 +59,8 @@ a project's tracker, tooling or workflow policy belongs in that project's own in
 ## Tests
 
 - `npm test` runs `node --test` with Node's default patterns: every `.mjs` under `test/` (`test/install.test.mjs`,
-  `test/relay/*.test.mjs`; the helpers `test/relay/harness.mjs` and `faults.mjs` load too and define no tests), files
+  `test/relay/*.test.mjs`, `test/scorecard*.test.mjs`; the helpers `test/relay/harness.mjs`, `faults.mjs` and
+  `test/scorecard-fixture.mjs` load too and define no tests), files
   in parallel. No dependencies. The relay's kill sweeps (`test/relay/faults-*.test.mjs`) make it
   take a few minutes.
 - Tests are deterministic. They use temporary directories and the relay test harness's fake Herdr; they

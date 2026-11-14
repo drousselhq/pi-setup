@@ -69,7 +69,8 @@ Update documentation in the same change as the behaviour it describes, in its on
 | `README.md` | What the setup contains and how to install it |
 | `CONTRIBUTING.md`, this file | Durable practices and rules |
 | `agent/relay/README.md` | Relay usage, files, configuration and code structure |
+| `EVALUATION.md` | How changes are judged, and the register of their expected effects and verdicts |
 | `ROADMAP.md` | Improvements considered but not made yet, and what would bring each forward |
-| Header comments of `scripts/install.mjs` and `agent/relay/pi-relay.mjs` | Command options and module map |
+| Header comments of `scripts/install.mjs`, `scripts/scorecard.mjs` and `agent/relay/pi-relay.mjs` | Command options and module map |
 
 Keep this file concise: put detail in the closest authoritative document, or enforce it in a test.

@@ -99,6 +99,7 @@ flowchart TD
 | `agent/relay/` | `pi-relay`: script, role and model configuration, and its [README](agent/relay/README.md) |
 | `docs/` | The example handoff, plan and console screenshot shown above (not installed) |
 | `scripts/install.mjs` | Installs `agent/` into `~/.pi/agent`, refusing to overwrite files changed in place |
+| `scripts/scorecard.mjs` | Measures finished relay work from its records, to judge changes ([EVALUATION.md](EVALUATION.md)); not installed |
 | `test/` | Tests (`npm test`) |
 
 ## Install
