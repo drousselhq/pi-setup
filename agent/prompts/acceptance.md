@@ -26,7 +26,12 @@ slice, paths and the result file you must write before stopping.
 - For each clause, test the observable result through the real entry point: the ordinary case,
   boundaries, invalid input and the failure behaviour the source specifies. Where the source
   prescribes a method or algorithm, include inputs that stress the method itself: near-coincident
-  or degenerate cases, and values at, just inside and just outside each range it relies on. Prefer independent
+  or degenerate cases, and values at, just inside and just outside each range it relies on. Where a clause
+  specifies a check, comparison or validation, include a few plausible near-misses the source requires it to
+  reject (a value just outside the tolerance or format it specifies: rounded, truncated or sign-flipped; where
+  it prescribes order or placement, a record out of place), each paired with a valid case at or just inside the
+  boundary, as the source permits, that must pass. Make sure each fails for the intended reason, and do not
+  tighten a tolerance or assert a representation or order the source leaves open. Prefer independent
   expected values (an analytic result, a documented example, a reference) over values computed the
   way an implementation would. Assert only what the source specifies: not incidental structure
   such as element or output order, private names or formatting, which a correct implementation
