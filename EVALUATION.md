@@ -12,7 +12,10 @@ and the Pi session files they name) and prints, per topic, a short summary of it
 line for what lies outside them (unfinished slices, planning, the final verification). `--detail` adds tables
 per slice, role and model; `--compare DATE|acceptance` sets two groups of finished slices side by side;
 `--since` keeps the slices finished since a date and adds the spend since then; `--until` sets the cutoff;
-`--size` adds the lines each slice changed. Its header lists the options. It only reads.
+`--size` adds the lines each slice changed. Given several topics (a project, or several projects), it starts
+with a table of them with a total row and one summary over all of them, leaving out topics with no slice
+finished in the period (their count and their spend in the period are shown); `--table` prints only that.
+Its header lists the options. It only reads.
 
 What it counts, and the limits that come with it:
 
@@ -44,7 +47,13 @@ What it counts, and the limits that come with it:
   context, not targets. Quota is shown per topic and day as observed account-wide change, shared with other
   sessions; it cannot be attributed to a slice. If Pi's session files are deleted, older costs become partial.
 - **Comparing by date** keeps slices finished before the date and slices started after it; a slice running
-  across the date is left out and named. `--since` applies to every part of the report.
+  across the date is left out and named. Each side shows the implementer and reviewer models it ran with.
+- **Periods:** `--since` selects the finished slices every figure is about, and adds the spend in the period;
+  the `cost` and `outside` lines and the final verification still cover whole topics.
+- **Several topics** add up: a total is weighted by slices, not an average of topics; each topic's costs run
+  to its own cutoff, so "up to" is the latest of them (`--until` gives one cutoff for all); waits of relays
+  running at the same time both count. A comparison over a project pools different work: read it with the
+  models on each side and the topics it covers, and prefer one topic where possible.
 - **Lines changed** (`--size`) count every file, generated and data files included: a size hint, not a measure
   of work.
 

@@ -41,6 +41,7 @@ export function cohort(slices) {
     priced: priced.length, partial: done.length - priced.length, costs: priced.map((s) => s.cost.costUsd),
     reviewCycleUsd: sum(shares.map((x) => x.reviewCycleUsd)), nudgedUsd: sum(shares.map((x) => x.nudgedUsd)),
     supersededUsd: total((s) => s.supersededUsd ?? 0), lines: done.map((s) => s.lines).filter((x) => Number.isFinite(x)),
+    runIds: new Set(done.flatMap((s) => [...(s.runIds ?? [])])),
   };
 }
 
@@ -53,7 +54,8 @@ export function finalText(r) {
   const runs = r.special.get('FINAL')?.verifications ?? [];
   if (!runs.length) return 'not run yet';
   const findings = r.special.get('FINAL').finalFindings;
-  return `${plural(runs.length, 'run')}: ${runs.map((v) => v ?? 'verification not recorded').join(', ')}`
+  const where = r.special.get('FINAL').of ? ` in ${r.special.get('FINAL').topics} of ${r.special.get('FINAL').of} topics` : '';
+  return `${plural(runs.length, 'run')}${where}: ${runs.map((v) => v ?? 'verification not recorded').join(', ')}`
     + `${findings ? ` · ${plural(findings, 'review')} with findings` : ''}`;
 }
 
@@ -127,7 +129,15 @@ export function compare(r, split) {
     row('Cost per slice', (c) => (c.priced ? `median ${money(median(c.costs))} ${values(c.costs, money)} (${c.partial} partial left out)` : '–')),
     row('Review-cycle share (approx.)', (c) => pct(c.reviewCycleUsd, sum(c.costs))),
     row('Lines changed', (c) => (c.lines.length ? `median ${median(c.lines)} ${values(c.lines)}` : 'not measured (--size)')),
+    row('Implementer/reviewer', (c) => pairs(r.topic, c.runIds)),
   ].join('\n');
+}
+
+// The implementer/reviewer models of the runs a group of slices ran in.
+function pairs(topic, runIds) {
+  const m = (run, role) => run.roles?.[role]?.model?.replace(/^.*\//, '') ?? '?';
+  const seen = new Set(topic.runs.filter((run) => runIds.has(run.run) && run.roles).map((run) => `${m(run, 'implementer')}/${m(run, 'reviewer')}`));
+  return [...seen].join(', ') || 'not recorded';
 }
 
 export function models(topic) {

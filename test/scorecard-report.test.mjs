@@ -85,3 +85,55 @@ test('several topics: a table first; bad input is refused with a clear message',
   const r = analyze(findTopics([dir])[1], parseArgs([dir]), readFake);
   assert.match(report(r, parseArgs([dir])), /last line incomplete \(ignored\)/);
 });
+
+// topic-b: S1 only, its own runs and models, then a final verification that fails with a review finding.
+function topicB() {
+  const ev = topicEvents();
+  const s1 = ev.slice(0, ev.findIndex((e) => e.type === 'slice_done' && e.slice === 'S1') + 1)
+    .map((e) => ({ ...e, run: 'rb', ...(e.type === 'run_start' ? { roles: { implementer: { model: 'p/other-impl' }, reviewer: { model: 'p/rev-model' } } } : {}) }));
+  const t = (n) => at(s1.length + n);
+  return [...s1,
+    { t: t(0), run: 'rb', slice: 'FINAL', type: 'agent_start', role: 'implementer', session: 'fin' },
+    { t: t(1), run: 'rb', slice: 'FINAL', type: 'step_result', role: 'implementer', purpose: 'final', verification: 'fail' },
+    { t: t(2), run: 'rb', slice: 'FINAL', type: 'step_result', role: 'reviewer', purpose: 'review', verdict: 'changes-required', blocking: ['F1'] }];
+}
+
+test('several topics: a total row and one summary over all of them; --table keeps only those; empty topics left out', () => {
+  const dir = project();
+  writeLines(path.join(dir, '.agents_work', 'topic-b', 'relay', 'events.jsonl'), topicB());
+  writeLines(path.join(dir, '.agents_work', 'topic-c', 'relay', 'events.jsonl'), topicEvents().slice(0, 4)); // nothing finished
+  const out = main([dir], readFake);
+  assert.match(out, /\| topic-b \| 2026-11-01 \| 1 \| 2\.00 \| 0\/1 \| 1 \| 1\.0h \| \$18 \| other-impl\/rev-model \|/);
+  assert.match(out, /\| all topics \(2\) \| 2026-11-01 \| 5 \| 0\.80 \| 1\/3 \| 2 \| 2\.0h \| \$12 \|/, 'weighted by slice, not a mean of the topics');
+  assert.doesNotMatch(out, /\| topic-c \|/);
+  assert.match(out, /\(1 topic with no slice finished left out; \$10 spent in them\)/);
+  assert.match(out, /\nall topics \(2\) · 5 finished slices · up to 2026-11-01T10:52:00Z/, 'the latest cutoff of the topics');
+  assert.match(out, /you {7}2 decisions \(2 of 2 recommended\) · waited 2\.0h/);
+  assert.match(out, /final {5}2 runs in 2 of 2 topics: verification not recorded, fail · 1 review with findings/);
+  assert.match(out, /cost {6}\$40 recorded \(1 session missing or partial\) · \$12 per finished slice \(3 of 5 fully recorded\) · review cycles ~50% of those · checking 23% of all/);
+  assert.match(out, /outside {3}other slices, planning and final: 0 decisions by you, 0 by the council · waited 0\.0h · \$1\.00/, 'topic totals add up');
+  assert.match(out, /\ntopic-a · 4 finished slices/, 'each topic follows');
+  assert.doesNotMatch(out, /topic-c ·/);
+  assert.match(main([dir, '--table', '--since', at(0)], readFake), /period {4}\$40 spent since/);
+  assert.match(main([dir, '--table', '--until', at(40)], readFake), /\(cutoff given: 2026-11-01T10:40:00Z\)/);
+  const table = main([dir, '--table', '--compare', at(31)], readFake);
+  assert.doesNotMatch(table, /\ntopic-a · /, '--table: no summary per topic');
+  assert.match(table, /all topics \(2\): finished before .* \(2\) versus started after \(2\); left out, running across the date: topic-a\/S2/);
+  assert.match(table, /\| Implementer\/reviewer \| (impl-model\/rev-model, other-impl\/rev-model|other-impl\/rev-model, impl-model\/rev-model) \| impl-model\/rev-model \|/);
+  const period = main([dir, '--table', '--since', at(30), '--compare', 'acceptance'], readFake);
+  assert.match(period, /all topics \(1\): without the acceptance step \(2\) versus with it \(1\)/, '--since applies to the comparison over all');
+  assert.match(period, /\(2 topics with no slice finished in the period left out; \$0\.00 spent in them since/);
+  assert.match(main([dir, '--since', at(500)], readFake), /^No topic has a slice finished in the period\.\n\(3 topics/);
+  fs.appendFileSync(path.join(dir, '.agents_work', 'topic-c', 'relay', 'events.jsonl'), '{damaged}\n');
+  assert.match(main([dir, '--table'], readFake), /\(records: topic-c \(1 unreadable lines\)\)/, 'named even for a topic left out');
+  fs.appendFileSync(path.join(dir, '.agents_work', 'topic-a', 'relay', 'events.jsonl'), '{"t":"2026-1');
+  assert.match(main([dir, '--table'], readFake), /\(records: topic-a \(0 unreadable lines, last line incomplete\); topic-c \(1 unreadable lines\)\)/,
+    'and for a topic shown, with --table');
+});
+
+test('topics of the same name in two projects are told apart', () => {
+  const [a, b] = [project(topicEvents(), 'same'), project(topicEvents(), 'same')];
+  const out = main([a, b, '--table'], readFake);
+  assert.match(out, new RegExp(`\\| ${path.basename(a)}/same \\|`));
+  assert.match(out, new RegExp(`\\| ${path.basename(b)}/same \\|`));
+});

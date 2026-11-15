@@ -4,11 +4,13 @@
 //
 //   node scripts/scorecard.mjs PATH...   a summary per topic (PATH: a topic directory, its relay/ directory, or a
 //                                        project: every topic under its .agents_work/); with several topics, a
-//                                        table of them first
+//                                        table of them with a total row and a summary of all of them first;
+//                                        topics with no slice finished (in the period) are left out
+//   --table                              with several topics, only the table and the summary of all of them
 //   --detail                             also the per-slice, per-role and per-model tables
 //   --compare DATE|acceptance            slices finished before DATE versus started after it (slices running
 //                                        across it are left out and named), or without versus with the
-//                                        acceptance step
+//                                        acceptance step; with several topics, also over all of them
 //   --since DATE                         only slices finished since DATE; also the spend since DATE (by the
 //                                        time of each model call)
 //   --until DATE                         cutoff: events and model calls after DATE are ignored
@@ -16,18 +18,19 @@
 //
 // Modules: scorecard/records.mjs (finding and reading records), measures.mjs (one pass over the events),
 // costs.mjs (sessions, cost shares, quota), report.mjs (cohorts, summary, comparisons, project table),
-// detail.mjs (the detail tables).
+// detail.mjs (the detail tables), overall.mjs (several topics as one).
 
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { addCosts } from './scorecard/costs.mjs';
 import { detail } from './scorecard/detail.mjs';
 import { analyzeTopic } from './scorecard/measures.mjs';
+import { active, nameTopics, overall } from './scorecard/overall.mjs';
 import { findTopics, gitShortstat, readEvents } from './scorecard/records.mjs';
-import { compare, inPeriod, iso, phoneSummary, projectTable } from './scorecard/report.mjs';
+import { compare, inPeriod, iso, phoneSummary } from './scorecard/report.mjs';
 
 export function parseArgs(argv) {
-  const opts = { paths: [], detail: false, compare: null, sinceMs: null, untilMs: null, size: false };
+  const opts = { paths: [], detail: false, compare: null, sinceMs: null, untilMs: null, size: false, table: false };
   const date = (flag, v) => {
     const t = Date.parse(v ?? '');
     if (!Number.isFinite(t)) throw new Error(`${flag} needs a date (for example 2026-11-12 or 2026-11-12T19:04Z), got "${v ?? ''}"`);
@@ -37,6 +40,7 @@ export function parseArgs(argv) {
     const a = argv[i];
     if (a === '--detail') opts.detail = true;
     else if (a === '--size') opts.size = true;
+    else if (a === '--table') opts.table = true;
     else if (a === '--compare') {
       opts.compare = argv[++i];
       if (opts.compare !== 'acceptance') date('--compare', opts.compare);
@@ -73,9 +77,10 @@ export function report(r, opts) {
 
 export function main(argv, readSessionFile) {
   const opts = parseArgs(argv);
-  const results = findTopics(opts.paths).map((t) => analyze(t, opts, readSessionFile));
-  const head = results.length > 1 ? [projectTable(results.map((r) => inPeriod(r, opts.sinceMs))), ''] : [];
-  return [...head, ...results.map((r) => report(r, opts))].join('\n\n');
+  const results = nameTopics(findTopics(opts.paths)).map((t) => analyze(t, opts, readSessionFile));
+  if (results.length === 1) return report(results[0], opts);
+  const shown = opts.table ? [] : results.filter((r) => active(r, opts.sinceMs));
+  return [overall(results, opts), ...shown.map((r) => report(r, opts))].join('\n\n');
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
