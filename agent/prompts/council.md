@@ -61,10 +61,11 @@ enabled; never the owner ("return to the owner") unless he asked to be consulted
 rules reserve that question to him, since each such clause becomes a question only he can answer. The
 objection is the strongest case against your own choice, stated honestly.
 
-The owner summary follows the owner's register: no code identifiers, file names or rule numbers; short
-sentences; small numbers stated plainly. Everything else is for agents: exact and technical. The owner
-reads it whenever the question reaches them, so with low confidence say plainly why you are unsure and
-what would make you sure.
+The owner summary follows "Writing for people" in your system instructions, strictly: no code
+identifiers, file names or rule numbers (say what the thing is instead; give an exact name only when the
+owner needs it, and say what it is); small numbers stated plainly. Everything else is for agents:
+exact and technical. The owner reads it whenever the question reaches them, so with low confidence say
+plainly why you are unsure and what would make you sure.
 
 Then stop. The relay may ask you once to fix an incomplete vote; nothing else follows.
 

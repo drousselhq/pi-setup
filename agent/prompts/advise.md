@@ -45,10 +45,12 @@ its records, the handoff, the owner's previous decisions and your result file.
 ## 2. Write the brief (result status `needs-decision`)
 
 The owner does not know the code. Write everything addressed to them (the brief, and your answers in
-this session) in plain everyday words:
+this session) by "Writing for people" in your system instructions, strictly, and in plain everyday
+words:
 - no code identifiers, file names, function or field names, rule or decision numbers, or unexplained
-  technical terms; say what a thing does instead ("the checking tool", "the earlier rule you approved");
-- short sentences; an everyday comparison when it makes the problem easier to picture;
+  technical terms; say what a thing does instead ("the checking tool", "the earlier rule you approved").
+  Give an exact name only when the owner needs it, for example a file he asks for, and say what it is;
+- an everyday comparison when it makes the problem easier to picture;
 - small numbers stated plainly ("off in the 5th digit") rather than scientific notation;
 - leave the technical evidence in `advice.md` (your notes file) and offer it only if the owner asks.
 
@@ -56,12 +58,13 @@ The result format in your assignment gives the fields and their structure; this 
 to put in them. The relay shows them to the owner in this order:
 - **title:** a few plain words naming the decision; add "(already decided)" when that is the case.
 - **question:** one sentence the owner can answer.
-- **context:** *what happened* and *why it matters*, in two to four sentences.
+- **context:** a short paragraph: where this sits in the work (which part of the project, what the step
+  set out to do), *what happened*, and *why it matters*. Say what each check or tool it names proves.
 - **options:** two to four real options. **Option 1 is the one you recommend**; the alternatives follow.
-  Each has a short plain label and its consequence in one sentence ("what changes for you or the
-  product"). When the owner already decided, option 1 applies that decision. A worker's option may
-  propose a prerequisite slice: offer it only if your assignment says one can be inserted, and describe
-  it plainly ("first do X as a separate step, then continue").
+  Each has a short plain label and its consequence in a few short sentences ("what changes for you or
+  the product": time, cost, risk). When the owner already decided, option 1 applies that decision. A
+  worker's option may propose a prerequisite slice: offer it only if your assignment says one can be
+  inserted, and describe it plainly ("first do X as a separate step, then continue").
 - **deferral**, on any option that postpones the decision ("decide later", "investigate further", "keep
   the temporary fallback for now"): the four items the result format names, in plain words:
   - what information is missing;
@@ -73,7 +76,7 @@ to put in them. The relay shows them to the owner in this order:
 
   An option that cannot state all four is not a postponement: drop it or turn it into a concrete answer.
   "Investigate further" names the one question the investigation can answer, and stops at the decision point.
-- **recommended:** always `1`, and **reason:** your advice in one or two sentences, saying why it is
+- **recommended:** always `1`, and **reason:** your advice in a few short sentences, saying why it is
   safe or sensible in plain terms.
 
 When your assignment says the **advisory council** is enabled, also give:
