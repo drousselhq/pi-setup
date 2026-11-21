@@ -95,7 +95,7 @@ flowchart TD
 | `agent/settings.json`, `agent/models.json` | Pi settings: packages, enabled models, defaults, model overrides |
 | `agent/prompts/` | Prompt templates (`/discussion`, `/handoff`, `/plan`, `/implement`, `/review`, `/deep-review`, …); `/advise` and `/council` are used by the relay only |
 | `agent/skills/agent-work/` | Conventions for `.agents_work/<topic>/` folders and role records |
-| `agent/extensions/` | Herdr agent-state and Moshi notification extensions, plus package settings |
+| `agent/extensions/` | Herdr agent-state and Moshi notification extensions, plus package settings (the auto-mode safety check in `pi-automode/config.json`) |
 | `agent/relay/` | `pi-relay`: script, role and model configuration, and its [README](agent/relay/README.md) |
 | `docs/` | The example handoff, plan and console screenshot shown above (not installed) |
 | `scripts/install.mjs` | Installs `agent/` into `~/.pi/agent`, refusing to overwrite files changed in place |
@@ -125,6 +125,30 @@ Not included:
   Recreate it with `ln -s ../../../.agents/skills/herdr ~/.pi/agent/skills/herdr`.
 - **`pi-quotas`:** `settings.json` loads it from a local checkout (`../../Documents/devel/pi-quotas`,
   relative to `~/.pi/agent`). Clone it there, or change the entry to its npm package.
+
+### The safety check
+
+`settings.json` loads [pi-automode](https://github.com/czottmann/pi-automode), pinned to a reviewed
+version, with its settings in `agent/extensions/pi-automode/config.json`. It never asks: before each
+agent tool call it either allows or blocks.
+- Fixed blocks: the package's own (deleting the root, home or system folders, shell profiles, persistence,
+  weakening security), plain `sudo` and `doas` commands, and the secret files listed in the settings for
+  the file tools. Shell access to secret files, disk commands and wrapped forms of `sudo` are left to the
+  model (a `hard_deny` line covers secret files).
+- Reads, edits and writes inside the working directory are allowed without a model call, except edits
+  of protected files there (`.git`, `.pi`, `.gitignore` and similar), which the model judges.
+- A small model (claude-haiku-5-5) judges every other action against the package's rules and the
+  settings' `environment` and `hard_deny` lines, from the user's messages: what the user asked for is
+  authorized; a file the agent read is not. Relay workers count their assignment as the user's request.
+- Any failure (no model, a timeout, a malformed answer) blocks the action; the agent sees the reason.
+- Pi installs the package when it starts; if that fails, Pi runs with no safety check at all. Check that
+  the status line shows `AM ●`. `/automode status` and `/automode off` (this session only) are available.
+  Each session's decisions are logged beside its session file (`<session>-pi-automode.jsonl`).
+- The check refuses agent edits to any path containing `pi-automode`, this checkout's settings file
+  included: the owner edits it, and changes the classifier model there rather than with `/automode model`
+  (which edits the installed copy, which the installer then reports as drifted).
+- With `.env` patterns in the settings, Pi's optional `grep` and `find` tools are refused on directories
+  (not enabled in this setup; the shell's `grep` and `find` are judged as any command).
 
 ## Working on it
 

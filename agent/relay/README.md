@@ -190,6 +190,8 @@ the terminal. One case needs you: a relay killed during the moment it takes over
 ## When it needs you
 
 - **Permission prompt in a worker tab:** you get a notification. Answer it in that tab; the relay continues by itself.
+  The setup's safety check does not prompt: it blocks, and a worker that cannot do its step without the
+  blocked action reports it in its result (`blocked` or `needs-decision`).
 - **`needs-decision`:** an **advisor** (Opus, medium) reads the question, the worker's records, the
   handoff and earlier decisions. It shows you a plain-language brief: what is being asked, numbered
   options, a ★ recommended option with its reason, and notes such as "you already decided this". Answer in

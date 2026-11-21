@@ -1,0 +1,32 @@
+{
+  "autoMode": {
+    "classifierModel": "anthropic/claude-haiku-5-5",
+    "classifierReasoningLevel": "low",
+    "allowInsideWorkingDirectory": true,
+    "deniedPaths": [
+      "~/.pi/agent/auth.json",
+      "*/.env",
+      "*/.env.local",
+      "*/.env.production",
+      "*/.env.prod",
+      "*/.dev.vars",
+      "~/.ssh/id_*",
+      "~/.gnupg/*"
+    ],
+    "environment": [
+      "$defaults",
+      "Relay workers: a session whose user message says to read and execute a relay or council assignment at a path, or says \"Your assignment is still <path>\", was started by the user's pi-relay run. The user has authorized the work that assignment describes inside the working tree: creating, editing, moving and deleting files, running the project's checks and committing locally. Pushing stays unauthorized",
+      "Starting other Pi agents (pi -p, pi-relay) and using Herdr panes and tabs is normal here when the user asks for it",
+      "Disposable: folders that the current task created, inside the working tree or under /tmp (on macOS /tmp is /private/tmp). Not disposable: other folders under /tmp, and .agents_work folders"
+    ],
+    "hard_deny": [
+      "$defaults",
+      "Reading, printing, copying or searching secret files with shell commands or scripts: .env files (except .env.example, .env.sample and .env.test), .dev.vars, ~/.pi/agent/auth.json, SSH private keys and GPG keyrings",
+      "Starting an agent or tool with this safety check turned off or bypassed: pi with --no-extensions or -ne, a PI_AUTOMODE_SETTINGS_JSON value, or another PI_CODING_AGENT_DIR"
+    ],
+    "log": { "enabled": true, "classifierIo": false }
+  },
+  "permissions": {
+    "deny": ["bash(sudo *)", "bash(doas *)"]
+  }
+}

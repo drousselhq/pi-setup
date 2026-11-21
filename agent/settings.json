@@ -1,6 +1,6 @@
 {
   "packages": [
-    "npm:@aliou/pi-guardrails",
+    "npm:@czottmann/pi-automode@1.18.0",
     "npm:@gotgenes/pi-anthropic-auth",
     "../../Documents/devel/pi-quotas",
     "npm:@injaneity/pi-computer-use",
@@ -32,7 +32,6 @@
   },
   "hideThinkingBlock": false,
   "extensionChangelogVersions": {
-    "{\"source\":\"npm:@aliou/pi-guardrails\",\"scope\":\"user\"}": "0.24.0",
     "{\"source\":\"npm:@gotgenes/pi-anthropic-auth\",\"scope\":\"user\"}": "3.6.0",
     "{\"source\":\"../../Documents/devel/pi-quotas\",\"scope\":\"user\"}": "0.5.0",
     "{\"source\":\"npm:pi-web-access\",\"scope\":\"user\"}": "0.48.0"

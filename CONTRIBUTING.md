@@ -45,6 +45,8 @@ complete. Do not mix unrelated changes or local files into a commit.
 - **Generated extensions.** `agent/extensions/herdr-agent-state.ts` and `moshi-hooks.ts` are written by
   Herdr and moshi-hook. Do not edit them; when their tool updates the installed copy, take it back with
   `--pull`.
+- **The safety check's settings** (`agent/extensions/pi-automode/config.json`) are edited by the owner:
+  the check refuses agent edits to them. An agent proposes the change; never work around a block.
 
 ## Prompts and the relay
 
